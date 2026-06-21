@@ -372,6 +372,11 @@ export default function App() {
     setMensagem('');
     setCarrinho((atual) => {
       const existe = atual.find((item) => item.id === produto.id);
+      const qtdAtual = existe ? existe.quantidade : 0;
+      if (qtdAtual + 1 > produto.estoque_atual) {
+        setErro(`Estoque insuficiente de "${produto.nome}" (disponível: ${Math.max(0, produto.estoque_atual)}).`);
+        return atual;
+      }
       if (existe) {
         return atual.map((item) => item.id === produto.id ? { ...item, quantidade: item.quantidade + 1 } : item);
       }
@@ -960,7 +965,20 @@ export default function App() {
         )}
 
         <main className="conteudo">
-          {isMobile && (
+          {isMobile && modoAcesso === 'caixa' && (
+            <div className="tabs-caixa no-print">
+              <button className={pagina === 'vender' ? 'ativo' : ''} onClick={() => setPagina('vender')}>
+                <i className="ti ti-ticket" /> Vender
+              </button>
+              <button className={pagina === 'minhas-vendas' ? 'ativo' : ''} onClick={() => setPagina('minhas-vendas')}>
+                <i className="ti ti-receipt-2" /> Minhas vendas
+              </button>
+              <button className="tabs-caixa-mais" onClick={() => setMenuAberto(true)} title="Mais opções">
+                <i className="ti ti-dots" />
+              </button>
+            </div>
+          )}
+          {isMobile && modoAcesso !== 'caixa' && (
             <div className="topo-mobile no-print">
               <button onClick={() => setMenuAberto(true)}><i className="ti ti-menu-2" /></button>
               <img src={AGENDO_LOGO} alt="AGENDO" />
@@ -987,13 +1005,15 @@ export default function App() {
           {mensagem && <div className="mensagem ok no-print">{mensagem}</div>}
           {erro && <div className="mensagem erro no-print">{erro}</div>}
 
-          <div className="resumo-faixa no-print">
-            <span>{modoAcesso === 'principal' ? 'Total geral' : 'Meu caixa'}: <b>{moeda(modoAcesso === 'principal' ? resumo.totalVendido : totalDaTela)}</b></span>
-            <span>Vendas: <b>{modoAcesso === 'principal' ? vendasValidas.length : vendasValidasDaTela.length}</b></span>
-            <span>Fichas: <b>{modoAcesso === 'principal' ? resumo.fichas : fichasDaTela}</b></span>
-            <span>Produtos ativos: <b>{produtosAtivos}</b></span>
-            <span>Estoque: <b>{estoqueTotal}</b></span>
-          </div>
+          {!(isMobile && modoAcesso === 'caixa' && pagina === 'vender') && (
+            <div className="resumo-faixa no-print">
+              <span>{modoAcesso === 'principal' ? 'Total geral' : 'Meu caixa'}: <b>{moeda(modoAcesso === 'principal' ? resumo.totalVendido : totalDaTela)}</b></span>
+              <span>Vendas: <b>{modoAcesso === 'principal' ? vendasValidas.length : vendasValidasDaTela.length}</b></span>
+              <span>Fichas: <b>{modoAcesso === 'principal' ? resumo.fichas : fichasDaTela}</b></span>
+              <span>Produtos ativos: <b>{produtosAtivos}</b></span>
+              <span>Estoque: <b>{estoqueTotal}</b></span>
+            </div>
+          )}
 
           {pagina === 'painel' && (
             <section className="acoes-rapidas no-print">
@@ -1051,7 +1071,7 @@ export default function App() {
             <section className="grid-venda">
               <div className="card">
                 <div className="cabecalho-card">
-                  <div>
+                  <div className="hide-mobile-caixa">
                     <h2>Vender fichas</h2>
                     <p>{modoAcesso === 'principal' ? 'Venda feita pelo Caixa Principal. Também entra no fechamento geral.' : 'Venda rápida do caixa selecionado.'}</p>
                   </div>
@@ -1062,7 +1082,7 @@ export default function App() {
                     <button key={produto.id} className="produto-btn" onClick={() => adicionarAoCarrinho(produto)} disabled={caixaFechado}>
                       <strong>{produto.nome}</strong>
                       <span>{moeda(produto.preco)}</span>
-                      <small>Estoque: {produto.estoque_atual}{produto.estoque_atual <= 0 ? ' • SEM ESTOQUE' : ''}</small>
+                      <small>Estoque: {Math.max(0, produto.estoque_atual)}{produto.estoque_atual <= 0 ? ' • SEM ESTOQUE' : ''}</small>
                     </button>
                   ))}
                 </div>
@@ -2784,6 +2804,18 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 }
 .topo-mobile img { height: 26px; width: auto; object-fit: contain; }
 .topo-mobile button { border: none; background: none; font-size: 19px; color: #888780; padding: 4px; display: flex; }
+.tabs-caixa {
+  display: flex; align-items: center; gap: 8px; padding: .55rem .9rem;
+  background: rgba(255,255,255,0.92); border-bottom: 0.5px solid #E8E6DE; margin: -1.35rem -1.65rem 1rem;
+}
+.tabs-caixa button {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: 0.5px solid var(--ag-border); border-radius: 12px; padding: 11px 8px;
+  background: rgba(255,255,255,0.7); color: #5F5E5A; font-size: 12.5px; font-weight: 700;
+}
+.tabs-caixa button.ativo { background: #0E7EA8; border-color: #0E7EA8; color: #fff; box-shadow: 0 6px 16px rgba(14,126,168,.22); }
+.tabs-caixa button i { font-size: 16px; }
+.tabs-caixa-mais { flex: 0 0 auto !important; width: 40px; padding: 11px 0 !important; }
 .busca-overlay {
   position: fixed; inset: 0; background: rgba(26,31,28,0.4); z-index: 9999;
   display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; backdrop-filter: blur(2px);
@@ -2840,6 +2872,7 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
   .topo .eyebrow { display: none; }
   .topo p { display: none; }
   .topo { margin-bottom: .9rem; }
+  .hide-mobile-caixa { display: none; }
 
   /* Tela de venda — otimizada pra uso no celular pelos caixas */
   .topo h1 { font-size: 21px; }
