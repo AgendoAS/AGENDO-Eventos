@@ -260,11 +260,13 @@ export default function App() {
     const porProduto = {};
     vendasValidas.forEach((v) => {
       (v.itens || []).forEach((i) => {
-        if (!porProduto[i.nome_produto]) {
-          porProduto[i.nome_produto] = { nome: i.nome_produto, qtd: 0, valor: 0 };
+        const precoUnit = Number(i.preco_unitario || 0);
+        const chave = `${i.nome_produto}__${precoUnit.toFixed(2)}`;
+        if (!porProduto[chave]) {
+          porProduto[chave] = { nome: i.nome_produto, precoUnit, qtd: 0, valor: 0 };
         }
-        porProduto[i.nome_produto].qtd += Number(i.quantidade || 0);
-        porProduto[i.nome_produto].valor += Number(i.subtotal || 0);
+        porProduto[chave].qtd += Number(i.quantidade || 0);
+        porProduto[chave].valor += Number(i.subtotal || 0);
       });
     });
 
@@ -506,7 +508,7 @@ export default function App() {
   async function atualizarProduto(id, campo, valor) {
     if (caixaFechado) return aviso('Evento fechado. Não é possível alterar produtos.');
     const camposTexto = ['nome', 'categoria'];
-    const payload = { [campo]: camposTexto.includes(campo) ? valor : Number(String(valor).replace(',', '.')) };
+    const payload = { [campo]: valor === null ? null : camposTexto.includes(campo) ? valor : Number(String(valor).replace(',', '.')) };
     const { data, error } = await supabase.from('produtos').update(payload).eq('id', id).select();
     if (error) return setErro(error.message);
     if (!data || !data.length) return setErro('A alteração não foi salva (possível bloqueio de permissão). Tente novamente.');
@@ -519,6 +521,16 @@ export default function App() {
     if (error) return setErro(error.message);
     if (!data || !data.length) return setErro('A alteração não foi salva (possível bloqueio de permissão).');
     aviso(produto.ativo ? 'Produto desativado.' : 'Produto ativado.');
+    carregarTudo();
+  }
+
+  async function alternarPromocao(produto) {
+    if (caixaFechado) return aviso('Evento fechado. Não é possível alterar produtos.');
+    if (!produto.preco_promocional && !produto.promocao_ativa) return aviso('Defina o preço promocional antes de ativar.');
+    const { data, error } = await supabase.from('produtos').update({ promocao_ativa: !produto.promocao_ativa }).eq('id', produto.id).select();
+    if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('A alteração não foi salva (possível bloqueio de permissão).');
+    aviso(produto.promocao_ativa ? `Promoção de "${produto.nome}" desativada.` : `Promoção de "${produto.nome}" ativada!`);
     carregarTudo();
   }
 
@@ -1072,7 +1084,7 @@ export default function App() {
               </div>
               <div className="card span2">
                 <h2>Por produto</h2>
-                <Tabela linhas={resumo.porProduto.map((p) => [p.nome, `${p.qtd} ficha(s)`, moeda(p.valor)])} vazio="Nenhum produto vendido ainda." />
+                <Tabela linhas={resumo.porProduto.map((p) => [`${p.nome} (${moeda(p.precoUnit)} cada)`, `${p.qtd} ficha(s)`, moeda(p.valor)])} vazio="Nenhum produto vendido ainda." />
               </div>
             </section>
           )}
@@ -1096,13 +1108,23 @@ export default function App() {
                   </div>
                 )}
                 <div className="produtos-grid">
-                  {produtosFiltrados.map((produto) => (
-                    <button key={produto.id} className="produto-btn" onClick={() => adicionarAoCarrinho(produto)} disabled={caixaFechado}>
-                      <strong>{produto.nome}</strong>
-                      <span>{moeda(produto.preco)}</span>
-                      <small>Estoque: {Math.max(0, produto.estoque_atual)}{produto.estoque_atual <= 0 ? ' • SEM ESTOQUE' : ''}</small>
-                    </button>
-                  ))}
+                  {produtosFiltrados.map((produto) => {
+                    const emPromo = produto.promocao_ativa && produto.preco_promocional != null;
+                    return (
+                      <button key={produto.id} className={`produto-btn ${emPromo ? 'em-promocao' : ''}`} onClick={() => adicionarAoCarrinho(produto)} disabled={caixaFechado}>
+                        {emPromo && <span className="selo-promo">PROMOÇÃO</span>}
+                        <strong>{produto.nome}</strong>
+                        {emPromo ? (
+                          <span className="preco-promo">
+                            <s>{moeda(produto.preco)}</s> {moeda(produto.preco_promocional)}
+                          </span>
+                        ) : (
+                          <span>{moeda(produto.preco)}</span>
+                        )}
+                        <small>Estoque: {Math.max(0, produto.estoque_atual)}{produto.estoque_atual <= 0 ? ' • SEM ESTOQUE' : ''}</small>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1177,7 +1199,7 @@ export default function App() {
                 <h2>Produtos e estoque</h2>
                 <div className="tabela-scroll">
                   <table>
-                    <thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Estoque</th><th>Status</th><th>Ação</th></tr></thead>
+                    <thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Promoção</th><th>Estoque</th><th>Status</th><th>Ação</th></tr></thead>
                     <tbody>
                       {produtos.map((p) => (
                         <tr key={p.id}>
@@ -1188,6 +1210,14 @@ export default function App() {
                             </select>
                           </td>
                           <td><input value={p.preco} disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, preco: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'preco', e.target.value)} /></td>
+                          <td>
+                            <div className="promo-celula">
+                              <input className="promo-preco" placeholder="Preço promo" inputMode="decimal" value={p.preco_promocional ?? ''} disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, preco_promocional: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'preco_promocional', e.target.value === '' ? null : e.target.value)} />
+                              <button className={`mini ${p.promocao_ativa ? 'verde' : ''}`} disabled={caixaFechado || !p.preco_promocional} onClick={() => alternarPromocao(p)}>
+                                {p.promocao_ativa ? 'Promo ativa' : 'Ativar promo'}
+                              </button>
+                            </div>
+                          </td>
                           <td><input value={p.estoque_atual} disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, estoque_atual: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'estoque_atual', e.target.value)} /></td>
                           <td><span className={p.ativo ? 'pill ok' : 'pill'}>{p.ativo ? 'Ativo' : 'Inativo'}</span></td>
                           <td><button className="mini" disabled={caixaFechado} onClick={() => alternarProduto(p)}>{p.ativo ? 'Desativar' : 'Ativar'}</button></td>
@@ -1739,7 +1769,7 @@ function Relatorio({ evento, vendas, resumo, produtos, caixas }) {
       ]} />
 
       <h3>Produtos vendidos</h3>
-      <Tabela linhas={resumo.porProduto.map((p) => [p.nome, `${p.qtd} ficha(s)`, moeda(p.valor)])} vazio="Nenhum produto vendido." />
+      <Tabela linhas={resumo.porProduto.map((p) => [`${p.nome} (${moeda(p.precoUnit)} cada)`, `${p.qtd} ficha(s)`, moeda(p.valor)])} vazio="Nenhum produto vendido." />
 
       <h3>Estoque atual</h3>
       <Tabela linhas={produtos.map((p) => [p.nome, moeda(p.preco), `Estoque: ${p.estoque_atual}`, p.ativo ? 'Ativo' : 'Inativo'])} />
@@ -1806,11 +1836,11 @@ function RelatorioPdf({ evento, vendas, resumo, produtos, caixas, movimentacoes,
       <section className="pdf-bloco">
         <h2>Produtos vendidos</h2>
         <table>
-          <thead><tr><th>Produto</th><th>Qtd.</th><th>Valor vendido</th></tr></thead>
+          <thead><tr><th>Produto</th><th>Preço unitário</th><th>Qtd.</th><th>Valor vendido</th></tr></thead>
           <tbody>
             {resumo.porProduto.length ? resumo.porProduto.map((p) => (
-              <tr key={`pdf-produto-${p.nome}`}><td>{p.nome}</td><td>{p.qtd}</td><td>{moeda(p.valor)}</td></tr>
-            )) : <tr><td colSpan="3">Nenhum produto vendido.</td></tr>}
+              <tr key={`pdf-produto-${p.nome}-${p.precoUnit}`}><td>{p.nome}</td><td>{moeda(p.precoUnit)}</td><td>{p.qtd}</td><td>{moeda(p.valor)}</td></tr>
+            )) : <tr><td colSpan="4">Nenhum produto vendido.</td></tr>}
           </tbody>
         </table>
       </section>
@@ -2849,6 +2879,17 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
   background: rgba(255,255,255,0.7); color: #5F5E5A; font-size: 11.5px; font-weight: 700;
 }
 .categorias-tabs button.ativo { background: #96C11F; border-color: #96C11F; color: #fff; }
+
+.produto-btn.em-promocao { border: 1.5px solid #E63214; background: rgba(230,50,20,0.05); position: relative; }
+.selo-promo {
+  position: absolute; top: -8px; right: 10px; background: #E63214; color: #fff;
+  font-size: 9px; font-weight: 800; letter-spacing: .04em; padding: 3px 8px; border-radius: 999px;
+}
+.preco-promo { display: flex; align-items: baseline; gap: 6px; }
+.preco-promo s { font-size: 11px; color: #B4B2A9; font-weight: 400; }
+.promo-celula { display: flex; flex-direction: column; gap: 5px; min-width: 130px; }
+.promo-preco { width: 100%; }
+.mini.verde { background: #96C11F; border-color: #96C11F; color: #fff; }
 .busca-overlay {
   position: fixed; inset: 0; background: rgba(26,31,28,0.4); z-index: 9999;
   display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; backdrop-filter: blur(2px);
