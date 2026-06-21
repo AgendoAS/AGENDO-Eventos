@@ -1429,6 +1429,7 @@ export default function App() {
                   <button className={`botao ${caixaAtual?.ativo === false ? 'verde' : ''}`} onClick={alternarMeuCaixa}>
                     {caixaAtual?.ativo === false ? 'Abrir meu caixa' : 'Fechar meu caixa'}
                   </button>
+                  <button className="botao" onClick={() => setPagina('impressora')}><i className="ti ti-printer" /> Config. impressão</button>
                   <button className="botao" onClick={carregarTudo}>Atualizar</button>
                 </div>
               </div>
