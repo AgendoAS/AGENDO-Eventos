@@ -38,6 +38,7 @@ export default function App() {
   const [vendaImpressaoDireta, setVendaImpressaoDireta] = useState(null);
 
   const [modoAcesso, setModoAcesso] = useState(() => localStorage.getItem('agendo_eventos_modo') || 'principal');
+  const [acessoConfirmado, setAcessoConfirmado] = useState(() => localStorage.getItem('agendo_eventos_acesso_confirmado') === 'sim');
   const [caixaSelecionadoId, setCaixaSelecionadoId] = useState(() => localStorage.getItem('agendo_eventos_caixa_id') || '');
   const [papelImpressao, setPapelImpressao] = useState(() => localStorage.getItem('agendo_eventos_papel') || '58');
   const [eventoForm, setEventoForm] = useState({ nome: '', instituicao: '', local_evento: '', data_evento: '' });
@@ -73,7 +74,7 @@ export default function App() {
       await carregarVendas(caixasData || []);
       await carregarMovimentacoes(caixasData || []);
     } catch (e) {
-      setErro(e.message || 'Erro ao carregar dados do sistema.');
+      setErro(e.message || 'Erro ao carregar dados do Supabase.');
     } finally {
       setCarregando(false);
     }
@@ -146,6 +147,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('agendo_eventos_modo', modoAcesso);
   }, [modoAcesso]);
+
+  useEffect(() => {
+    if (acessoConfirmado) {
+      localStorage.setItem('agendo_eventos_acesso_confirmado', 'sim');
+    } else {
+      localStorage.removeItem('agendo_eventos_acesso_confirmado');
+    }
+  }, [acessoConfirmado]);
 
   useEffect(() => {
     localStorage.setItem('agendo_eventos_caixa_id', caixaSelecionadoId || '');
@@ -506,10 +515,32 @@ export default function App() {
   }
 
 
-  function trocarModo(novoModo) {
-    setModoAcesso(novoModo);
-    setPagina(novoModo === 'principal' ? 'painel' : 'vender');
+  function entrarComoPrincipal() {
+    setModoAcesso('principal');
+    setCaixaSelecionadoId('');
+    setAcessoConfirmado(true);
+    setPagina('painel');
     limparVendaPrincipal();
+  }
+
+  function entrarComoCaixa(caixaId) {
+    const escolhido = caixasAtivos.find((c) => c.id === caixaId) || primeiroCaixaOperador;
+    setModoAcesso('caixa');
+    if (escolhido?.id) setCaixaSelecionadoId(escolhido.id);
+    setAcessoConfirmado(true);
+    setPagina('vender');
+    limparVendaPrincipal();
+  }
+
+  function sairAcesso() {
+    setAcessoConfirmado(false);
+    setPagina('vender');
+    limparVendaPrincipal();
+  }
+
+  function trocarModo(novoModo) {
+    if (novoModo === 'principal') return entrarComoPrincipal();
+    return entrarComoCaixa(caixaSelecionadoId);
   }
 
   async function salvarDadosEvento(e) {
@@ -587,7 +618,6 @@ export default function App() {
     ['vender', 'Vender fichas'],
     ['minhas-vendas', 'Minhas vendas'],
     ['impressora', 'Config. impressora'],
-    ['acesso', 'Trocar acesso'],
   ];
   const menu = modoAcesso === 'principal' ? menuPrincipal : menuCaixa;
 
@@ -599,6 +629,20 @@ export default function App() {
 
   if (carregando) {
     return <div className="tela-carregando">Carregando AGENDO Eventos...</div>;
+  }
+
+  if (!acessoConfirmado) {
+    return (
+      <>
+        <style>{css}</style>
+        <TelaAcesso
+          evento={evento}
+          caixas={caixasAtivos.filter((c) => c.tipo !== 'principal')}
+          entrarComoPrincipal={entrarComoPrincipal}
+          entrarComoCaixa={entrarComoCaixa}
+        />
+      </>
+    );
   }
 
   return (
@@ -620,12 +664,10 @@ export default function App() {
             <strong>{evento?.instituicao || 'CAPETTE'}</strong>
             <span>{evento?.nome || 'Festa Junina'}</span>
           </div>
-          <div className="evento-card acesso-card">
-            <small>ACESSO</small>
-            <div className="acesso-switch">
-              <button className={modoAcesso === 'principal' ? 'ativo' : ''} onClick={() => trocarModo('principal')}>Principal</button>
-              <button className={modoAcesso === 'caixa' ? 'ativo' : ''} onClick={() => trocarModo('caixa')}>Caixa</button>
-            </div>
+          <div className="evento-card sessao-card">
+            <small>SESSÃO</small>
+            <strong>{modoAcesso === 'principal' ? 'Caixa Principal' : caixaAtual?.nome || 'Caixa'}</strong>
+            <span>{modoAcesso === 'principal' ? 'Administração do evento' : caixaAtual?.operador || 'Operador'}</span>
             {modoAcesso === 'caixa' && (
               <select value={caixaAtual?.id || ''} onChange={(e) => setCaixaSelecionadoId(e.target.value)}>
                 {caixasAtivos.filter((c) => c.tipo !== 'principal').map((c) => <option key={c.id} value={c.id}>{c.nome} • {c.operador || 'Operador'}</option>)}
@@ -642,8 +684,9 @@ export default function App() {
           </nav>
 
           <div className="rodape-side">
-            <span>Status</span>
+            <span>Status do evento</span>
             <strong>{evento?.status === 'fechado' ? 'Fechado' : 'Aberto'}</strong>
+            <button className="sair-acesso" onClick={sairAcesso}>Sair</button>
           </div>
         </aside>
 
@@ -899,7 +942,7 @@ export default function App() {
                   <button className="botao" onClick={exportarCsv}>Exportar vendas CSV</button>
                   <button className="botao" onClick={imprimirRelatorio}>Salvar relatório PDF</button>
                 </div>
-                <div className="nota-config">Importação automática ficou bloqueada nesta versão para não duplicar vendas no banco por engano.</div>
+                <div className="nota-config">Importação automática ficou bloqueada nesta versão para não duplicar vendas no Supabase por engano.</div>
               </div>
             </section>
           )}
@@ -907,12 +950,9 @@ export default function App() {
           {pagina === 'config' && (
             <section className="stack">
               <div className="card">
-                <h2>Configurações</h2>
-                <p>Um único AGENDO Eventos com dois modos de acesso.</p>
-                <div className="opcoes-grid">
-                  <button className={`opcao-card ${modoAcesso === 'principal' ? 'ativa' : ''}`} onClick={() => trocarModo('principal')}><strong>Modo Principal</strong><span>Vende, administra, fecha caixa e emite relatório.</span></button>
-                  <button className={`opcao-card ${modoAcesso === 'caixa' ? 'ativa' : ''}`} onClick={() => trocarModo('caixa')}><strong>Modo Caixa Rápido</strong><span>Vende fichas, vê minhas vendas e reimprime.</span></button>
-                </div>
+                <h2>Configurações do sistema</h2>
+                <p>Parâmetros gerais do AGENDO Eventos. O acesso é escolhido na tela inicial para manter a operação limpa.</p>
+                <div className="nota-config">Banco online ativo. Os dados deste evento são sincronizados entre todos os caixas pelo Supabase.</div>
               </div>
             </section>
           )}
@@ -1019,6 +1059,60 @@ export default function App() {
         caixaFechado={caixaFechado}
       />
     </>
+  );
+}
+
+
+function TelaAcesso({ evento, caixas, entrarComoPrincipal, entrarComoCaixa }) {
+  const caixasOperacao = caixas.length ? caixas : [];
+  return (
+    <div className="acesso-page">
+      <div className="acesso-watermark">AGENDO</div>
+      <section className="acesso-panel">
+        <div className="acesso-logo-row">
+          <div className="acesso-logo">AG</div>
+          <div>
+            <div className="acesso-marca">AGENDO</div>
+            <h1>Eventos</h1>
+            <p>{evento?.nome || 'Sistema de caixa para eventos'}</p>
+          </div>
+        </div>
+
+        <div className="acesso-evento">
+          <span>Instituição</span>
+          <strong>{evento?.instituicao || 'CAPETTE'}</strong>
+          <small>{evento?.local_evento || 'Evento integrado ao AGENDO'}</small>
+        </div>
+
+        <div className="acesso-opcoes">
+          <button className="acesso-opcao principal" onClick={entrarComoPrincipal}>
+            <span>Caixa Principal</span>
+            <strong>Administração completa</strong>
+            <small>Vendas, produtos, fechamento, relatórios e configurações.</small>
+          </button>
+
+          <div className="acesso-caixas">
+            <div className="acesso-caixas-titulo">
+              <span>Caixas operadores</span>
+              <small>Escolha o caixa de atendimento</small>
+            </div>
+            {caixasOperacao.length ? caixasOperacao.map((c) => (
+              <button className="acesso-opcao caixa" key={c.id} onClick={() => entrarComoCaixa(c.id)}>
+                <span>{c.nome}</span>
+                <strong>{c.operador || 'Operador'}</strong>
+                <small>Venda rápida e reimpressão.</small>
+              </button>
+            )) : (
+              <button className="acesso-opcao caixa" onClick={() => entrarComoCaixa(null)}>
+                <span>Caixa operador</span>
+                <strong>Iniciar atendimento</strong>
+                <small>Venda rápida e reimpressão.</small>
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -1334,17 +1428,7 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; opacity:
   color: #9BBFCE;
   margin-top: 1px;
 }
-.brand::after {
-  content: "Módulo";
-  margin-left: auto;
-  border: 0.5px solid rgba(14,126,168,.25);
-  background: rgba(14,126,168,.07);
-  color: var(--ag-blue);
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 9.5px;
-  font-weight: 800;
-}
+.brand::after { display: none; }
 .evento-card {
   margin: 10px 12px;
   background: rgba(255,255,255,0.8);
@@ -1366,6 +1450,8 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; opacity:
 .evento-card strong { font-size: 12px; font-weight: 800; color: var(--ag-blue-dark); }
 .evento-card span { font-size: 10.5px; color: var(--ag-muted); }
 
+.sessao-card { gap: 6px; }
+.sessao-card select { width: 100%; border: 0.5px solid var(--ag-border); border-radius: 9px; padding: 7px; background: rgba(255,255,255,.85); color: var(--ag-blue-dark); font-size: 11px; margin-top: 4px; }
 .acesso-card { gap: 8px; }
 .acesso-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .acesso-switch button {
@@ -1425,6 +1511,7 @@ nav button.ativo { color: var(--ag-blue); background: rgba(14,126,168,0.08); bor
 }
 .rodape-side span { display: block; font-size: 10.5px; }
 .rodape-side strong { display: block; margin-top: 2px; font-size: 12px; color: var(--ag-blue-dark); }
+.sair-acesso { margin-top: 10px; width: 100%; border: 0.5px solid rgba(14,126,168,.18); background: rgba(255,255,255,.66); color: var(--ag-blue-dark); border-radius: 10px; padding: 8px 10px; font-weight: 800; font-size: 11px; text-align: center; }
 
 .conteudo {
   min-width: 0;
@@ -1615,6 +1702,69 @@ tr:last-child td { border-bottom: none; }
   font-size: 12px;
 }
 .tela-carregando { min-height: 100vh; display: grid; place-items: center; font-size: 18px; font-weight: 850; color: var(--ag-blue-dark); background: linear-gradient(135deg, var(--ag-bg), var(--ag-bg-2)); }
+
+.acesso-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #F8F7F2 0%, #EEF4E8 100%);
+}
+.acesso-watermark {
+  position: fixed;
+  right: -28px;
+  bottom: -42px;
+  font-size: clamp(92px, 18vw, 250px);
+  font-weight: 950;
+  letter-spacing: -0.08em;
+  color: rgba(14,126,168,0.045);
+  pointer-events: none;
+  user-select: none;
+}
+.acesso-panel {
+  width: min(1040px, 100%);
+  border: 0.5px solid var(--ag-border);
+  border-radius: 28px;
+  background: rgba(255,255,255,0.62);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 24px 80px rgba(6,52,79,.08);
+  padding: 28px;
+  position: relative;
+}
+.acesso-logo-row { display: flex; align-items: center; gap: 16px; border-bottom: 0.5px solid var(--ag-border); padding-bottom: 20px; margin-bottom: 18px; }
+.acesso-logo { width: 64px; height: 64px; border-radius: 18px; background: var(--ag-blue); color: #fff; display: grid; place-items: center; font-weight: 950; font-size: 25px; letter-spacing: -.06em; box-shadow: 0 16px 38px rgba(14,126,168,.16); }
+.acesso-marca { color: var(--ag-blue); text-transform: uppercase; letter-spacing: .14em; font-size: 12px; font-weight: 950; }
+.acesso-logo-row h1 { margin: 1px 0 2px; color: var(--ag-blue-dark); font-size: 44px; line-height: 1; letter-spacing: -.055em; }
+.acesso-logo-row p { margin: 0; color: var(--ag-muted); font-size: 15px; }
+.acesso-evento { border: 0.5px solid rgba(14,126,168,.12); border-radius: 18px; background: rgba(248,247,242,.64); padding: 16px; margin-bottom: 18px; }
+.acesso-evento span { display: block; color: #B4B2A9; text-transform: uppercase; letter-spacing: .10em; font-size: 11px; font-weight: 800; }
+.acesso-evento strong { display: block; color: var(--ag-blue-dark); font-size: 22px; margin-top: 4px; }
+.acesso-evento small { display: block; color: var(--ag-muted); margin-top: 3px; font-size: 13px; }
+.acesso-opcoes { display: grid; grid-template-columns: .9fr 1.1fr; gap: 14px; align-items: stretch; }
+.acesso-caixas { display: grid; gap: 10px; }
+.acesso-caixas-titulo { padding: 4px 2px; }
+.acesso-caixas-titulo span { display: block; color: var(--ag-blue-dark); font-weight: 900; font-size: 16px; }
+.acesso-caixas-titulo small { display: block; color: var(--ag-muted); font-size: 12px; margin-top: 2px; }
+.acesso-opcao {
+  width: 100%;
+  border: 0.5px solid var(--ag-border);
+  border-radius: 18px;
+  background: rgba(255,255,255,.80);
+  text-align: left;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 106px;
+}
+.acesso-opcao:hover { border-color: rgba(14,126,168,.34); box-shadow: 0 12px 30px rgba(14,126,168,.08); }
+.acesso-opcao span { color: var(--ag-blue); font-size: 12px; font-weight: 950; text-transform: uppercase; letter-spacing: .08em; }
+.acesso-opcao strong { color: var(--ag-blue-dark); font-size: 20px; letter-spacing: -.03em; }
+.acesso-opcao small { color: var(--ag-muted); font-size: 13px; line-height: 1.35; }
+.acesso-opcao.principal { background: linear-gradient(135deg, rgba(14,126,168,.10), rgba(255,255,255,.82)); min-height: 100%; justify-content: center; }
+.acesso-opcao.principal strong { font-size: 24px; }
 .relatorio h2 { font-size: 17px; }
 .relatorio p { font-size: 12px; }
 
@@ -1655,6 +1805,9 @@ tr:last-child td { border-bottom: none; }
   .conteudo { padding: 1rem; }
   .carrinho-card { position: static; }
   .pagamentos { grid-template-columns: repeat(2, 1fr); }
+  .acesso-opcoes { grid-template-columns: 1fr; }
+  .acesso-logo-row h1 { font-size: 34px; }
+  .acesso-panel { padding: 18px; border-radius: 20px; }
 }
 
 @media print {
