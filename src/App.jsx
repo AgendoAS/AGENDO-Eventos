@@ -2152,9 +2152,9 @@ td input {
 .botoes-finalizar { display: grid; grid-template-columns: 1fr 1.5fr; gap: 10px; margin-top: 14px; }
 .linha-form { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; }
 
-.tabela-scroll { overflow: auto; border-radius: 12px; border: 0.5px solid #E8E6DE; background: rgba(255,255,255,0.62); }
-table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; border-bottom: 0.5px solid #E8E6DE; padding: 9px 10px; vertical-align: middle; font-size: 12px; }
+.tabela-scroll { overflow: auto; border-radius: 12px; border: 0.5px solid #E8E6DE; background: rgba(255,255,255,0.62); -webkit-overflow-scrolling: touch; }
+table { width: 100%; min-width: 640px; border-collapse: collapse; }
+th, td { text-align: left; border-bottom: 0.5px solid #E8E6DE; padding: 9px 10px; vertical-align: middle; font-size: 12px; white-space: nowrap; }
 th { color: #7D7A72; background: rgba(248,247,242,0.7); font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; }
 tr:last-child td { border-bottom: none; }
 .pill { display: inline-flex; border-radius: 999px; padding: 5px 8px; background: #ECECEC; color: #555; font-weight: 850; font-size: 10.5px; }
