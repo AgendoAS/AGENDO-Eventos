@@ -2789,6 +2789,37 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
     box-shadow: 0 4px 14px rgba(6,52,79,.05);
   }
   .conteudo { padding-top: 1.1rem; }
+
+  /* Tela de venda — otimizada pra uso no celular pelos caixas */
+  .topo h1 { font-size: 21px; }
+  .topo p { font-size: 11px; }
+  .resumo-faixa { font-size: 11px; gap: 6px 10px; padding: 9px 11px; }
+  .grid-venda { gap: 12px; padding-bottom: 90px; }
+  .produtos-grid { grid-template-columns: repeat(2, 1fr); gap: 9px; }
+  .produto-btn { min-height: 86px; padding: 12px; border-radius: 14px; }
+  .produto-btn strong { font-size: 13px; }
+  .produto-btn span { font-size: 18px; }
+  .carrinho-card { padding-bottom: 4px; }
+  .lista-carrinho { max-height: 32vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .linha-carrinho { padding: 11px; }
+  .qtd-actions button { width: 34px; height: 34px; font-size: 16px; }
+  .pagamentos button { padding: 12px 8px; font-size: 12.5px; }
+  .botoes-finalizar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    margin: 0; grid-template-columns: 1fr 2fr; gap: 8px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(252,251,248,0.97);
+    border-top: 0.5px solid #E0DDD5;
+    box-shadow: 0 -8px 24px rgba(6,52,79,.08);
+    backdrop-filter: none;
+  }
+  .botoes-finalizar .botao { min-height: 48px; }
+  .botoes-finalizar .botao.verde { font-size: 14px; font-weight: 800; }
+
+  /* Listas e tabelas — toque mais fácil */
+  th, td { padding: 11px 9px; font-size: 11.5px; }
+  .mini { padding: 8px 10px; font-size: 11px; }
+  .acoes-linha { gap: 6px; }
 }
 
 `;
