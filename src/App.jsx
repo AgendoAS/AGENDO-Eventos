@@ -64,6 +64,11 @@ export default function App() {
   const [vendaImpressaoId, setVendaImpressaoId] = useState(null);
   const [vendaImpressaoDireta, setVendaImpressaoDireta] = useState(null);
 
+  const [colapsado, setColapsado] = useState(() => localStorage.getItem('agendo_eventos_menu_colapsado') === '1');
+  const [secFechadas, setSecFechadas] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('agendo_eventos_sec_fechadas') || '["Configurações"]')); }
+    catch { return new Set(['Configurações']); }
+  });
   const [modoAcesso, setModoAcesso] = useState(() => localStorage.getItem('agendo_eventos_modo') || 'principal');
   const [acessoConfirmado, setAcessoConfirmado] = useState(() => localStorage.getItem('agendo_eventos_acesso_confirmado') === 'sim');
   const [caixaSelecionadoId, setCaixaSelecionadoId] = useState(() => localStorage.getItem('agendo_eventos_caixa_id') || '');
@@ -315,6 +320,23 @@ export default function App() {
     });
   }
 
+  function toggleColapsado() {
+    setColapsado((v) => {
+      localStorage.setItem('agendo_eventos_menu_colapsado', v ? '0' : '1');
+      return !v;
+    });
+  }
+
+  function toggleSec(nome) {
+    setSecFechadas((prev) => {
+      const novo = new Set(prev);
+      novo.has(nome) ? novo.delete(nome) : novo.add(nome);
+      localStorage.setItem('agendo_eventos_sec_fechadas', JSON.stringify([...novo]));
+      return novo;
+    });
+  }
+  const secVisivel = (nome) => colapsado || !secFechadas.has(nome);
+
   function aviso(texto) {
     setMensagem(texto);
     setTimeout(() => setMensagem(''), 3500);
@@ -445,8 +467,9 @@ export default function App() {
   async function atualizarProduto(id, campo, valor) {
     if (caixaFechado) return aviso('Evento fechado. Não é possível alterar produtos.');
     const payload = { [campo]: campo === 'nome' ? valor : Number(String(valor).replace(',', '.')) };
-    const { error } = await supabase.from('produtos').update(payload).eq('id', id);
+    const { data, error } = await supabase.from('produtos').update(payload).eq('id', id).select();
     if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('A alteração não foi salva (possível bloqueio de permissão). Tente novamente.');
     carregarTudo();
   }
 
@@ -657,8 +680,9 @@ export default function App() {
 
   async function atualizarCaixa(id, campo, valor) {
     const payload = { [campo]: campo === 'ativo' ? Boolean(valor) : valor };
-    const { error } = await supabase.from('caixas').update(payload).eq('id', id);
+    const { data, error } = await supabase.from('caixas').update(payload).eq('id', id).select();
     if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('A alteração não foi salva (possível bloqueio de permissão). Tente novamente.');
     carregarTudo();
   }
 
@@ -765,41 +789,62 @@ export default function App() {
     <>
       <style>{css}</style>
       <style>{cssImpressao(papelAtual.largura)}</style>
-      <div className="app-shell">
+      <div className={`app-shell ${colapsado ? 'colapsado' : ''}`}>
         <aside className="sidebar no-print">
           <div className="brand">
-            <img className="brand-logo" src={AGENDO_LOGO} alt="AGENDO" />
-            <div>
-              <strong>AGENDO Eventos</strong>
-              <span>Gestão integrada para eventos</span>
-            </div>
-          </div>
-
-          <div className="evento-card evento-oscard">
-            <img src={CAPETTE_LOGO} alt={evento?.instituicao || 'Instituição'} />
-            <small>EVENTO</small>
-            <strong>{evento?.instituicao || 'CAPETTE'}</strong>
-            <span>{evento?.nome || 'Festa Junina'}</span>
-          </div>
-          <div className="evento-card sessao-card">
-            <small>ACESSO</small>
-            <strong>{modoAcesso === 'principal' ? 'Caixa Principal' : caixaAtual?.nome || 'Caixa'}</strong>
-            <span>{modoAcesso === 'principal' ? 'Administração e fechamento' : caixaAtual?.operador || 'Operador'}</span>
-            {modoAcesso === 'caixa' && (
-              <select value={caixaAtual?.id || ''} onChange={(e) => setCaixaSelecionadoId(e.target.value)}>
-                {caixasAtivos.filter((c) => c.tipo !== 'principal').map((c) => <option key={c.id} value={c.id}>{c.nome} • {c.operador || 'Operador'}</option>)}
-              </select>
+            {!colapsado && (
+              <>
+                <img className="brand-logo" src={AGENDO_LOGO} alt="AGENDO" />
+                <div>
+                  <strong>AGENDO Eventos</strong>
+                  <span>Gestão integrada para eventos</span>
+                </div>
+              </>
             )}
+            {colapsado && <img className="brand-logo" src={AGENDO_LOGO} alt="AGENDO" />}
+            <button className="colapsar-btn" onClick={toggleColapsado} title={colapsado ? 'Expandir menu' : 'Recolher menu'}>
+              <i className={`ti ti-layout-sidebar-left-${colapsado ? 'expand' : 'collapse'}`} />
+            </button>
           </div>
 
-          <nav>
+          {!colapsado && (
+            <div className="evento-card evento-oscard">
+              <img src={CAPETTE_LOGO} alt={evento?.instituicao || 'Instituição'} />
+              <small>EVENTO</small>
+              <strong>{evento?.instituicao || 'CAPETTE'}</strong>
+              <span>{evento?.nome || 'Festa Junina'}</span>
+            </div>
+          )}
+          {!colapsado && (
+            <div className="evento-card sessao-card">
+              <small>ACESSO</small>
+              <strong>{modoAcesso === 'principal' ? 'Caixa Principal' : caixaAtual?.nome || 'Caixa'}</strong>
+              <span>{modoAcesso === 'principal' ? 'Administração e fechamento' : caixaAtual?.operador || 'Operador'}</span>
+              {modoAcesso === 'caixa' && (
+                <select value={caixaAtual?.id || ''} onChange={(e) => setCaixaSelecionadoId(e.target.value)}>
+                  {caixasAtivos.filter((c) => c.tipo !== 'principal').map((c) => <option key={c.id} value={c.id}>{c.nome} • {c.operador || 'Operador'}</option>)}
+                </select>
+              )}
+            </div>
+          )}
+
+          <nav className="sidebar-scroll">
             {menuSecoes.map((secao) => (
               <div className="nav-secao" key={secao.titulo}>
-                <div className="nav-secao-titulo">{secao.titulo}</div>
-                {secao.itens.map(([id, label]) => (
-                  <button key={id} className={pagina === id ? 'ativo' : ''} onClick={() => setPagina(id)}>
+                <div
+                  className="nav-secao-titulo"
+                  onClick={colapsado ? undefined : () => toggleSec(secao.titulo)}
+                  style={{ cursor: colapsado ? 'default' : 'pointer' }}
+                >
+                  {!colapsado && secao.titulo}
+                  {!colapsado && (
+                    <i className={`ti ti-chevron-${secVisivel(secao.titulo) ? 'down' : 'right'}`} />
+                  )}
+                </div>
+                {secVisivel(secao.titulo) && secao.itens.map(([id, label]) => (
+                  <button key={id} className={pagina === id ? 'ativo' : ''} title={colapsado ? label : undefined} onClick={() => setPagina(id)}>
                     <i className={`ti ti-${MENU_ICONS[id] || 'circle'} nav-icone`} />
-                    <span>{label}</span>
+                    {!colapsado && <span>{label}</span>}
                   </button>
                 ))}
               </div>
@@ -808,14 +853,18 @@ export default function App() {
 
           <div className="rodape-side">
             <div className="user-badge">{modoAcesso === 'principal' ? 'CP' : (caixaAtual?.nome || 'CX').slice(-2)}</div>
-            <div>
-              <span>{modoAcesso === 'principal' ? 'Principal' : caixaAtual?.operador || 'Operador'}</span>
-              <strong>{evento?.status === 'fechado' ? 'Fechado' : 'Aberto'}</strong>
-            </div>
-            <div className="side-actions">
-              <button className="sair-acesso" onClick={sairAcesso}>Trocar acesso</button>
-              <button className="sair-acesso danger" onClick={sairSistema}>Sair</button>
-            </div>
+            {!colapsado && (
+              <div className="user-info">
+                <span>{modoAcesso === 'principal' ? 'Principal' : caixaAtual?.operador || 'Operador'}</span>
+                <strong>{evento?.status === 'fechado' ? 'Fechado' : 'Aberto'}</strong>
+              </div>
+            )}
+            {!colapsado && (
+              <div className="side-actions">
+                <button className="sair-acesso" onClick={sairAcesso} title="Trocar acesso"><i className="ti ti-replace" /></button>
+                <button className="sair-acesso danger" onClick={sairSistema} title="Sair"><i className="ti ti-logout" /></button>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -1165,6 +1214,11 @@ export default function App() {
               <Relatorio evento={evento} vendas={vendas} resumo={resumo} produtos={produtos} caixas={caixas} />
             </section>
           )}
+
+          <div className="rodape-conteudo no-print">
+            <span>AGENDO Eventos · {evento?.instituicao || 'CAPETTE'} · {caixaAtual?.nome || (modoAcesso === 'principal' ? 'Caixa Principal' : 'Caixa')}</span>
+            <span className="rodape-marca">AGENDO Integra</span>
+          </div>
         </main>
       </div>
       <div className="print-only area-impressao">
@@ -2459,93 +2513,41 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .acesso-opcao.principal { border-top: 3px solid #0E7EA8; }
 .acesso-opcao.caixa { border-left: 3px solid rgba(150,193,31,.65); }
 
-
-
-/* ===== AJUSTE FINO — PADRÃO CAPETTE / AGENDO INTEGRA ===== */
-.app-shell { grid-template-columns: 228px 1fr; }
-.sidebar {
-  background: rgba(255,255,255,0.52);
-  border-right: 0.5px solid #E0DDD5;
-  box-shadow: none;
+/* ===== Sidebar recolhível (padrão Layout.jsx do CAPETTE) ===== */
+.app-shell.colapsado { grid-template-columns: 64px 1fr; }
+.app-shell.colapsado .sidebar { width: 64px; }
+.app-shell .sidebar { transition: width .2s cubic-bezier(.2,.8,.3,1); width: 228px; }
+.colapsar-btn {
+  border: none; background: none; cursor: pointer; color: rgba(155,191,206,0.6);
+  padding: 4px; line-height: 1; display: flex; margin-left: auto; flex-shrink: 0;
 }
-.brand {
-  min-height: 60px;
-  padding: 13px 14px;
-  gap: 9px;
-  border-bottom: 0.5px solid #E0DDD5;
+.colapsar-btn:hover { color: #0E7EA8; }
+.app-shell.colapsado .brand { justify-content: center; padding: 14px 0; }
+.app-shell.colapsado .brand-logo { width: 32px; height: 32px; }
+.app-shell.colapsado .colapsar-btn { margin: 6px auto 0; }
+.nav-secao-titulo { display: flex; align-items: center; justify-content: space-between; user-select: none; }
+.nav-secao-titulo i { font-size: 11px; }
+.app-shell.colapsado .nav-secao { height: 10px; border-bottom: 0.5px solid #F1EFE8; margin-bottom: 4px; overflow: hidden; }
+.app-shell.colapsado nav button { justify-content: center; padding: 10px 0; }
+.app-shell.colapsado .nav-icone { font-size: 17px; }
+.rodape-side { display: flex; align-items: center; gap: 9px; }
+.app-shell.colapsado .rodape-side { flex-direction: column; padding: .7rem 0; }
+.user-badge { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 10px; flex-shrink: 0; }
+.user-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.user-info span { font-size: 10.5px; color: #7D7A72; }
+.user-info strong { font-size: 11px; color: #06344F; margin: 0; }
+.side-actions { display: flex; flex-direction: row; gap: 5px; }
+.sair-acesso { border-radius: 50%; width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.sair-acesso.danger { color: #E63214; border-color: rgba(230,50,20,.2); }
+.rodape-conteudo {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 2px 0; margin-top: 14px; border-top: 0.5px solid #E8E6DE;
+  font-size: 10px; color: #B4B2A9;
 }
-.brand-logo { width: 32px; height: 32px; object-fit: contain; }
-.brand strong { font-size: 12.5px; font-weight: 700; color: #06344F; letter-spacing: -0.02em; }
-.brand span { font-size: 9.5px; color: #9BBFCE; }
-.evento-card {
-  margin: 10px 12px;
-  background: rgba(255,255,255,0.80);
-  border: 0.5px solid #E0DDD5;
-  border-radius: 12px;
-  padding: 10px 12px;
-  box-shadow: none;
-}
-.evento-oscard img {
-  width: 112px;
-  max-height: 42px;
-  object-fit: contain;
-  object-position: left center;
-  margin-bottom: 8px;
-}
-.evento-card small { font-size: 9.5px; font-weight: 600; color: #B4B2A9; letter-spacing: .09em; }
-.evento-card strong { font-size: 12px; font-weight: 800; color: #06344F; }
-.evento-card span { font-size: 10.5px; color: #7D7A72; }
-nav { padding: 4px 0 10px; }
-.nav-secao-titulo {
-  font-size: 9.5px;
-  color: #B4B2A9;
-  padding: 10px 1.1rem 2px;
-  text-transform: uppercase;
-  letter-spacing: .09em;
-  font-weight: 500;
-}
-nav button {
-  padding: 8.5px 1.1rem;
-  gap: 9px;
-  font-size: 12.5px;
-  font-weight: 400;
-  color: #5F5E5A;
-  background: transparent;
-  border-left: 2px solid transparent;
-  border-radius: 0;
-}
-.nav-icone { font-size: 15px; width: 15px; height: 15px; opacity: .88; }
-nav button:hover {
-  background: rgba(14,126,168,0.06);
-  color: #0E7EA8;
-}
-nav button.ativo {
-  background: rgba(14,126,168,0.08);
-  color: #0E7EA8;
-  border-left-color: #0E7EA8;
-  font-weight: 500;
-}
-.rodape-side {
-  grid-template-columns: 32px 1fr auto;
-  padding: 10px 12px;
-  border-top: 0.5px solid #E0DDD5;
-  gap: 9px;
-}
-.user-badge { width: 32px; height: 32px; background: rgba(14,126,168,.12); color: #0E7EA8; }
-.side-actions { display: flex; flex-direction: column; gap: 5px; }
-.sair-acesso { padding: 5px 8px; font-size: 10px; border-radius: 999px; }
-.conteudo { padding: 1.35rem 1.55rem 2.5rem; }
-.topo h1 { font-size: 27px; }
-.card { box-shadow: none; border-color: #E0DDD5; }
-.card.kpi { border-top: 0.5px solid #E0DDD5; }
+.rodape-conteudo .rodape-marca { color: #D3D1C7; }
 
 @media (max-width: 1000px) {
-  .app-shell { grid-template-columns: 1fr; }
-  .brand-logo { width: 34px; height: 34px; }
-  .topo-acoes { width: 100%; }
-  .topo-btn { flex: 1; }
-  .rodape-side { grid-template-columns: 32px 1fr auto; }
+  .app-shell.colapsado { grid-template-columns: 1fr; }
 }
-
 
 `;
