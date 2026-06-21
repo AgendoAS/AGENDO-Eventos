@@ -1645,17 +1645,18 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; opacity:
   background: linear-gradient(135deg, var(--ag-bg) 0%, var(--ag-bg-2) 100%);
 }
 .app-shell::before {
-  content: "AGENDO";
+  content: "";
   position: fixed;
-  left: 18px;
-  bottom: 8px;
+  right: -7vw;
+  bottom: 3vh;
+  width: clamp(230px, 34vw, 520px);
+  height: clamp(230px, 34vw, 520px);
   z-index: -1;
-  color: rgba(14,126,168,0.045);
-  font-size: clamp(68px, 12vw, 176px);
-  font-weight: 900;
-  letter-spacing: -0.075em;
   pointer-events: none;
   user-select: none;
+  background: url('/agendo-logo.png') center/contain no-repeat;
+  opacity: 0.055;
+  filter: grayscale(100%);
 }
 
 .sidebar {
@@ -2254,6 +2255,86 @@ tr:last-child td { border-bottom: none; }
 .ficha-termica p { font-size: 8px; margin: 2px 0; color: #000; }
 .linha-pontilhada { border-top: 1px dashed #000; margin: 8px 0; }
 
+
+
+/* ===== AJUSTE FINO — PADRÃO CAPETTE / AGENDO INTEGRA ===== */
+.app-shell { grid-template-columns: 228px 1fr; }
+.sidebar {
+  background: rgba(255,255,255,0.52);
+  border-right: 0.5px solid #E0DDD5;
+  box-shadow: none;
+}
+.brand {
+  min-height: 60px;
+  padding: 13px 14px;
+  gap: 9px;
+  border-bottom: 0.5px solid #E0DDD5;
+}
+.brand-logo { width: 32px; height: 32px; object-fit: contain; }
+.brand strong { font-size: 12.5px; font-weight: 700; color: #06344F; letter-spacing: -0.02em; }
+.brand span { font-size: 9.5px; color: #9BBFCE; }
+.evento-card {
+  margin: 10px 12px;
+  background: rgba(255,255,255,0.80);
+  border: 0.5px solid #E0DDD5;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: none;
+}
+.evento-oscard img {
+  width: 112px;
+  max-height: 42px;
+  object-fit: contain;
+  object-position: left center;
+  margin-bottom: 8px;
+}
+.evento-card small { font-size: 9.5px; font-weight: 600; color: #B4B2A9; letter-spacing: .09em; }
+.evento-card strong { font-size: 12px; font-weight: 800; color: #06344F; }
+.evento-card span { font-size: 10.5px; color: #7D7A72; }
+nav { padding: 4px 0 10px; }
+.nav-secao-titulo {
+  font-size: 9.5px;
+  color: #B4B2A9;
+  padding: 10px 1.1rem 2px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  font-weight: 500;
+}
+nav button {
+  padding: 8.5px 1.1rem;
+  gap: 9px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: #5F5E5A;
+  background: transparent;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+}
+.nav-icone { font-size: 15px; width: 15px; height: 15px; opacity: .88; }
+nav button:hover {
+  background: rgba(14,126,168,0.06);
+  color: #0E7EA8;
+}
+nav button.ativo {
+  background: rgba(14,126,168,0.08);
+  color: #0E7EA8;
+  border-left-color: #0E7EA8;
+  font-weight: 500;
+}
+.rodape-side {
+  grid-template-columns: 32px 1fr auto;
+  padding: 10px 12px;
+  border-top: 0.5px solid #E0DDD5;
+  gap: 9px;
+}
+.user-badge { width: 32px; height: 32px; background: rgba(14,126,168,.12); color: #0E7EA8; }
+.side-actions { display: flex; flex-direction: column; gap: 5px; }
+.sair-acesso { padding: 5px 8px; font-size: 10px; border-radius: 999px; }
+.conteudo { padding: 1.35rem 1.55rem 2.5rem; }
+.topo h1 { font-size: 27px; }
+.card { box-shadow: none; border-color: #E0DDD5; }
+.card.kpi { border-top: 0.5px solid #E0DDD5; }
+
 @media (max-width: 1000px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { height: auto; position: relative; }
@@ -2377,6 +2458,86 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .acesso-marca { color: #0E7EA8; }
 .acesso-opcao.principal { border-top: 3px solid #0E7EA8; }
 .acesso-opcao.caixa { border-left: 3px solid rgba(150,193,31,.65); }
+
+
+
+/* ===== AJUSTE FINO — PADRÃO CAPETTE / AGENDO INTEGRA ===== */
+.app-shell { grid-template-columns: 228px 1fr; }
+.sidebar {
+  background: rgba(255,255,255,0.52);
+  border-right: 0.5px solid #E0DDD5;
+  box-shadow: none;
+}
+.brand {
+  min-height: 60px;
+  padding: 13px 14px;
+  gap: 9px;
+  border-bottom: 0.5px solid #E0DDD5;
+}
+.brand-logo { width: 32px; height: 32px; object-fit: contain; }
+.brand strong { font-size: 12.5px; font-weight: 700; color: #06344F; letter-spacing: -0.02em; }
+.brand span { font-size: 9.5px; color: #9BBFCE; }
+.evento-card {
+  margin: 10px 12px;
+  background: rgba(255,255,255,0.80);
+  border: 0.5px solid #E0DDD5;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: none;
+}
+.evento-oscard img {
+  width: 112px;
+  max-height: 42px;
+  object-fit: contain;
+  object-position: left center;
+  margin-bottom: 8px;
+}
+.evento-card small { font-size: 9.5px; font-weight: 600; color: #B4B2A9; letter-spacing: .09em; }
+.evento-card strong { font-size: 12px; font-weight: 800; color: #06344F; }
+.evento-card span { font-size: 10.5px; color: #7D7A72; }
+nav { padding: 4px 0 10px; }
+.nav-secao-titulo {
+  font-size: 9.5px;
+  color: #B4B2A9;
+  padding: 10px 1.1rem 2px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  font-weight: 500;
+}
+nav button {
+  padding: 8.5px 1.1rem;
+  gap: 9px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: #5F5E5A;
+  background: transparent;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+}
+.nav-icone { font-size: 15px; width: 15px; height: 15px; opacity: .88; }
+nav button:hover {
+  background: rgba(14,126,168,0.06);
+  color: #0E7EA8;
+}
+nav button.ativo {
+  background: rgba(14,126,168,0.08);
+  color: #0E7EA8;
+  border-left-color: #0E7EA8;
+  font-weight: 500;
+}
+.rodape-side {
+  grid-template-columns: 32px 1fr auto;
+  padding: 10px 12px;
+  border-top: 0.5px solid #E0DDD5;
+  gap: 9px;
+}
+.user-badge { width: 32px; height: 32px; background: rgba(14,126,168,.12); color: #0E7EA8; }
+.side-actions { display: flex; flex-direction: column; gap: 5px; }
+.sair-acesso { padding: 5px 8px; font-size: 10px; border-radius: 999px; }
+.conteudo { padding: 1.35rem 1.55rem 2.5rem; }
+.topo h1 { font-size: 27px; }
+.card { box-shadow: none; border-color: #E0DDD5; }
+.card.kpi { border-top: 0.5px solid #E0DDD5; }
 
 @media (max-width: 1000px) {
   .app-shell { grid-template-columns: 1fr; }
