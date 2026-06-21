@@ -871,11 +871,6 @@ export default function App() {
           <small>ACESSO</small>
           <strong>{modoAcesso === 'principal' ? 'Caixa Principal' : caixaAtual?.nome || 'Caixa'}</strong>
           <span>{modoAcesso === 'principal' ? 'Administração e fechamento' : caixaAtual?.operador || 'Operador'}</span>
-          {modoAcesso === 'caixa' && (
-            <select value={caixaAtual?.id || ''} onChange={(e) => setCaixaSelecionadoId(e.target.value)}>
-              {caixasAtivos.filter((c) => c.tipo !== 'principal').map((c) => <option key={c.id} value={c.id}>{c.nome} • {c.operador || 'Operador'}</option>)}
-            </select>
-          )}
         </div>
       )}
 
@@ -2764,13 +2759,24 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
   .app-shell .sidebar {
     width: 100%;
     height: auto;
-    max-height: 70vh;
+    max-height: 75vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     position: relative;
     top: auto;
     backdrop-filter: none;
     background: #FCFBF8;
-    border-bottom: 2px solid var(--ag-border);
+    border: none;
+    border-radius: 0 0 22px 22px;
+    box-shadow: 0 16px 30px rgba(6,52,79,.10);
   }
+  .topo-mobile {
+    margin: 0 0 .85rem;
+    border-radius: 14px;
+    border: 0.5px solid #E8E6DE;
+    box-shadow: 0 4px 14px rgba(6,52,79,.05);
+  }
+  .conteudo { padding-top: 1rem; }
 }
 
 `;
