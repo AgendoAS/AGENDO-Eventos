@@ -498,6 +498,7 @@ export default function App() {
     cmd += '--------------------------------\n\n';
     cmd += `${paraTextoTermico(evento?.nome || 'Evento')}\n`;
     cmd += `${nomeCaixa} - Venda no ${numeroVenda}\n`;
+    cmd += '--------------------------------\n';
     cmd += '\n\n\n\n\n\n';            // espaço extra antes do corte
     cmd += GS + 'V' + '\x00';         // corta papel
     return cmd;
