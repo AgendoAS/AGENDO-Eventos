@@ -55,7 +55,7 @@ export default function App() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [recuperacaoMsg, setRecuperacaoMsg] = useState('');
 
-  const [novoProduto, setNovoProduto] = useState({ nome: '', preco: '', estoque: '' });
+  const [novoProduto, setNovoProduto] = useState({ nome: '', preco: '', estoque: '', categoria: '' });
   const [movimento, setMovimento] = useState({ tipo: 'Reforço', valor: '', motivo: '' });
   const [carrinho, setCarrinho] = useState([]);
   const [pagamento, setPagamento] = useState('Pix');
@@ -298,6 +298,14 @@ export default function App() {
     ? caixaPrincipal
     : (caixasAtivos.find((c) => c.id === caixaSelecionadoId) || primeiroCaixaOperador || caixaPrincipal);
   const produtosVendaveis = produtos.filter((p) => p.ativo);
+  const categoriasProduto = useMemo(() => {
+    const set = new Set(produtosVendaveis.map((p) => p.categoria || 'Geral'));
+    return ['Todas', ...Array.from(set).sort()];
+  }, [produtosVendaveis]);
+  const [categoriaAtiva, setCategoriaAtiva] = useState('Todas');
+  const produtosFiltrados = categoriaAtiva === 'Todas'
+    ? produtosVendaveis
+    : produtosVendaveis.filter((p) => (p.categoria || 'Geral') === categoriaAtiva);
   const vendasDaTela = modoAcesso === 'principal' ? vendas : vendas.filter((v) => v.caixa_id === caixaAtual?.id);
   const vendasValidasDaTela = vendasDaTela.filter((v) => v.status !== 'cancelada');
   const totalDaTela = vendasValidasDaTela.reduce((s, v) => s + Number(v.total || 0), 0);
@@ -374,8 +382,7 @@ export default function App() {
       const existe = atual.find((item) => item.id === produto.id);
       const qtdAtual = existe ? existe.quantidade : 0;
       if (qtdAtual + 1 > produto.estoque_atual) {
-        setErro(`Estoque insuficiente de "${produto.nome}" (disponível: ${Math.max(0, produto.estoque_atual)}).`);
-        return atual;
+        aviso(`Atenção: vendendo "${produto.nome}" sem estoque registrado.`);
       }
       if (existe) {
         return atual.map((item) => item.id === produto.id ? { ...item, quantidade: item.quantidade + 1 } : item);
@@ -484,18 +491,20 @@ export default function App() {
       preco,
       estoque_inicial: estoque,
       estoque_atual: estoque,
+      categoria: novoProduto.categoria.trim() || 'Geral',
       ativo: true,
     }).select();
     if (error) return setErro(error.message);
     if (!data || !data.length) return setErro('Produto não foi salvo (possível bloqueio de permissão). Tente novamente.');
-    setNovoProduto({ nome: '', preco: '', estoque: '' });
+    setNovoProduto({ nome: '', preco: '', estoque: '', categoria: '' });
     aviso(`Produto "${nome}" adicionado.`);
     carregarTudo();
   }
 
   async function atualizarProduto(id, campo, valor) {
     if (caixaFechado) return aviso('Evento fechado. Não é possível alterar produtos.');
-    const payload = { [campo]: campo === 'nome' ? valor : Number(String(valor).replace(',', '.')) };
+    const camposTexto = ['nome', 'categoria'];
+    const payload = { [campo]: camposTexto.includes(campo) ? valor : Number(String(valor).replace(',', '.')) };
     const { data, error } = await supabase.from('produtos').update(payload).eq('id', id).select();
     if (error) return setErro(error.message);
     if (!data || !data.length) return setErro('A alteração não foi salva (possível bloqueio de permissão). Tente novamente.');
@@ -767,7 +776,7 @@ export default function App() {
     { titulo: 'Configurações', itens: [['impressora', 'Config. impressora'], ['backup', 'Backup / exportação'], ['config', 'Configurações']] },
   ];
   const menuCaixaSecoes = [
-    { titulo: 'Operação', itens: [['vender', 'Vender fichas'], ['minhas-vendas', 'Minhas vendas']] },
+    { titulo: 'Operação', itens: [['vender', 'Vender fichas'], ['minhas-vendas', 'Vendas']] },
     { titulo: 'Configurações', itens: [['impressora', 'Config. impressão']] },
   ];
   const menuSecoes = modoAcesso === 'principal' ? menuPrincipalSecoes : menuCaixaSecoes;
@@ -971,7 +980,7 @@ export default function App() {
                 <i className="ti ti-ticket" /> Vender
               </button>
               <button className={pagina === 'minhas-vendas' ? 'ativo' : ''} onClick={() => setPagina('minhas-vendas')}>
-                <i className="ti ti-receipt-2" /> Minhas vendas
+                <i className="ti ti-receipt-2" /> Vendas
               </button>
               <button className="tabs-caixa-mais" onClick={() => setMenuAberto(true)} title="Mais opções">
                 <i className="ti ti-dots" />
@@ -1077,8 +1086,15 @@ export default function App() {
                   </div>
                   <span className="pill ok">{caixaAtual?.nome || 'Caixa'}</span>
                 </div>
+                {categoriasProduto.length > 2 && (
+                  <div className="categorias-tabs no-print">
+                    {categoriasProduto.map((c) => (
+                      <button key={c} className={categoriaAtiva === c ? 'ativo' : ''} onClick={() => setCategoriaAtiva(c)}>{c}</button>
+                    ))}
+                  </div>
+                )}
                 <div className="produtos-grid">
-                  {produtosVendaveis.map((produto) => (
+                  {produtosFiltrados.map((produto) => (
                     <button key={produto.id} className="produto-btn" onClick={() => adicionarAoCarrinho(produto)} disabled={caixaFechado}>
                       <strong>{produto.nome}</strong>
                       <span>{moeda(produto.preco)}</span>
@@ -1148,6 +1164,10 @@ export default function App() {
                   <input placeholder="Nome do produto" value={novoProduto.nome} onChange={(e) => setNovoProduto({ ...novoProduto, nome: e.target.value })} disabled={caixaFechado} />
                   <input placeholder="Preço" inputMode="decimal" value={novoProduto.preco} onChange={(e) => setNovoProduto({ ...novoProduto, preco: e.target.value })} disabled={caixaFechado} />
                   <input placeholder="Estoque" inputMode="numeric" value={novoProduto.estoque} onChange={(e) => setNovoProduto({ ...novoProduto, estoque: e.target.value })} disabled={caixaFechado} />
+                  <input placeholder="Categoria (ex.: Doces)" list="lista-categorias" value={novoProduto.categoria} onChange={(e) => setNovoProduto({ ...novoProduto, categoria: e.target.value })} disabled={caixaFechado} />
+                  <datalist id="lista-categorias">
+                    {categoriasProduto.filter((c) => c !== 'Todas').map((c) => <option key={c} value={c} />)}
+                  </datalist>
                   <button className="botao verde" disabled={caixaFechado}>Adicionar</button>
                 </form>
               </div>
@@ -1155,11 +1175,12 @@ export default function App() {
                 <h2>Produtos e estoque</h2>
                 <div className="tabela-scroll">
                   <table>
-                    <thead><tr><th>Produto</th><th>Preço</th><th>Estoque</th><th>Status</th><th>Ação</th></tr></thead>
+                    <thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Estoque</th><th>Status</th><th>Ação</th></tr></thead>
                     <tbody>
                       {produtos.map((p) => (
                         <tr key={p.id}>
                           <td><input value={p.nome} disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, nome: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'nome', e.target.value)} /></td>
+                          <td><input value={p.categoria || ''} placeholder="Geral" list="lista-categorias" disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, categoria: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'categoria', e.target.value || 'Geral')} /></td>
                           <td><input value={p.preco} disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, preco: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'preco', e.target.value)} /></td>
                           <td><input value={p.estoque_atual} disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, estoque_atual: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'estoque_atual', e.target.value)} /></td>
                           <td><span className={p.ativo ? 'pill ok' : 'pill'}>{p.ativo ? 'Ativo' : 'Inativo'}</span></td>
@@ -1191,7 +1212,7 @@ export default function App() {
             <section className="card">
               <div className="cabecalho-card">
                 <div>
-                  <h2>Minhas vendas</h2>
+                  <h2>Vendas</h2>
                   <p>{caixaAtual?.nome || 'Caixa'} • apenas vendas deste caixa.</p>
                 </div>
                 <button className="botao" onClick={carregarTudo}>Atualizar</button>
@@ -1612,7 +1633,7 @@ function tituloPagina(pagina) {
     vender: 'Vender fichas',
     produtos: 'Produtos e estoque',
     vendas: 'Vendas realizadas',
-    'minhas-vendas': 'Minhas vendas',
+    'minhas-vendas': 'Vendas',
     fechamento: 'Fechamento',
     movimentacoes: 'Sangria/reforço',
     relatorios: 'Relatórios',
@@ -2816,6 +2837,12 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .tabs-caixa button.ativo { background: #0E7EA8; border-color: #0E7EA8; color: #fff; box-shadow: 0 6px 16px rgba(14,126,168,.22); }
 .tabs-caixa button i { font-size: 16px; }
 .tabs-caixa-mais { flex: 0 0 auto !important; width: 40px; padding: 11px 0 !important; }
+.categorias-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 2px; }
+.categorias-tabs button {
+  border: 0.5px solid var(--ag-border); border-radius: 999px; padding: 7px 14px;
+  background: rgba(255,255,255,0.7); color: #5F5E5A; font-size: 11.5px; font-weight: 700;
+}
+.categorias-tabs button.ativo { background: #96C11F; border-color: #96C11F; color: #fff; }
 .busca-overlay {
   position: fixed; inset: 0; background: rgba(26,31,28,0.4); z-index: 9999;
   display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; backdrop-filter: blur(2px);
