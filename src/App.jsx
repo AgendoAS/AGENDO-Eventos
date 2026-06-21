@@ -17,6 +17,13 @@ const hojeBR = () =>
 
 const formas = ['Pix', 'Dinheiro', 'Débito', 'Crédito', 'Cartão'];
 
+const AGENDO_LOGO = '/agendo-logo.png';
+const AGENDO_TEXTO = '/agendo-texto.png';
+const CAPETTE_LOGO = '/logo.png';
+const MENU_ICONS = {
+  painel: '▦', vender: '+', produtos: '□', vendas: '≡', fechamento: '✓', movimentacoes: '↕', relatorios: '▤', dados: '◎', impressora: '⎙', caixas: '◉', backup: '⇩', config: '⚙', 'minhas-vendas': '≡'
+};
+
 export default function App() {
   const [pagina, setPagina] = useState('painel');
   const [evento, setEvento] = useState(null);
@@ -600,26 +607,19 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
-  const menuPrincipal = [
-    ['painel', 'Painel geral'],
-    ['vender', 'Vender fichas'],
-    ['produtos', 'Produtos e estoque'],
-    ['vendas', 'Vendas realizadas'],
-    ['fechamento', 'Fechamento'],
-    ['movimentacoes', 'Sangria/reforço'],
-    ['relatorios', 'Relatórios'],
-    ['dados', 'Dados do evento'],
-    ['impressora', 'Config. impressora'],
-    ['caixas', 'Caixas / operadores'],
-    ['backup', 'Backup / exportação'],
-    ['config', 'Configurações'],
+  const menuPrincipalSecoes = [
+    { titulo: 'Principal', itens: [['painel', 'Painel geral']] },
+    { titulo: 'Operação diária', itens: [['vender', 'Vender fichas'], ['produtos', 'Produtos e estoque'], ['vendas', 'Vendas realizadas']] },
+    { titulo: 'Gestão do evento', itens: [['fechamento', 'Fechamento'], ['movimentacoes', 'Sangria / reforço'], ['dados', 'Dados do evento'], ['caixas', 'Caixas e operadores']] },
+    { titulo: 'Relatórios', itens: [['relatorios', 'Relatórios']] },
+    { titulo: 'Configurações', itens: [['impressora', 'Config. impressora'], ['backup', 'Backup / exportação'], ['config', 'Configurações']] },
   ];
-  const menuCaixa = [
-    ['vender', 'Vender fichas'],
-    ['minhas-vendas', 'Minhas vendas'],
-    ['impressora', 'Config. impressora'],
+  const menuCaixaSecoes = [
+    { titulo: 'Operação', itens: [['vender', 'Vender fichas'], ['minhas-vendas', 'Minhas vendas']] },
+    { titulo: 'Configurações', itens: [['impressora', 'Config. impressão']] },
   ];
-  const menu = modoAcesso === 'principal' ? menuPrincipal : menuCaixa;
+  const menuSecoes = modoAcesso === 'principal' ? menuPrincipalSecoes : menuCaixaSecoes;
+  const menu = menuSecoes.flatMap((sec) => sec.itens);
 
   useEffect(() => {
     if (!menu.some(([id]) => id === pagina)) {
@@ -652,22 +652,23 @@ export default function App() {
       <div className="app-shell">
         <aside className="sidebar no-print">
           <div className="brand">
-            <div className="logo">AG</div>
+            <img className="brand-logo" src={AGENDO_LOGO} alt="AGENDO" />
             <div>
               <strong>AGENDO Eventos</strong>
-              <span>{modoAcesso === 'principal' ? 'Caixa Principal' : 'Caixa Rápido'}</span>
+              <span>Gestão integrada para eventos</span>
             </div>
           </div>
 
-          <div className="evento-card">
+          <div className="evento-card evento-oscard">
+            <img src={CAPETTE_LOGO} alt={evento?.instituicao || 'Instituição'} />
             <small>EVENTO</small>
             <strong>{evento?.instituicao || 'CAPETTE'}</strong>
             <span>{evento?.nome || 'Festa Junina'}</span>
           </div>
           <div className="evento-card sessao-card">
-            <small>SESSÃO</small>
+            <small>ACESSO</small>
             <strong>{modoAcesso === 'principal' ? 'Caixa Principal' : caixaAtual?.nome || 'Caixa'}</strong>
-            <span>{modoAcesso === 'principal' ? 'Administração do evento' : caixaAtual?.operador || 'Operador'}</span>
+            <span>{modoAcesso === 'principal' ? 'Administração e fechamento' : caixaAtual?.operador || 'Operador'}</span>
             {modoAcesso === 'caixa' && (
               <select value={caixaAtual?.id || ''} onChange={(e) => setCaixaSelecionadoId(e.target.value)}>
                 {caixasAtivos.filter((c) => c.tipo !== 'principal').map((c) => <option key={c.id} value={c.id}>{c.nome} • {c.operador || 'Operador'}</option>)}
@@ -676,16 +677,25 @@ export default function App() {
           </div>
 
           <nav>
-            {menu.map(([id, label]) => (
-              <button key={id} className={pagina === id ? 'ativo' : ''} onClick={() => setPagina(id)}>
-                {label}
-              </button>
+            {menuSecoes.map((secao) => (
+              <div className="nav-secao" key={secao.titulo}>
+                <div className="nav-secao-titulo">{secao.titulo}</div>
+                {secao.itens.map(([id, label]) => (
+                  <button key={id} className={pagina === id ? 'ativo' : ''} onClick={() => setPagina(id)}>
+                    <span className="nav-icone">{MENU_ICONS[id] || '•'}</span>
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
             ))}
           </nav>
 
           <div className="rodape-side">
-            <span>Status do evento</span>
-            <strong>{evento?.status === 'fechado' ? 'Fechado' : 'Aberto'}</strong>
+            <div className="user-badge">{modoAcesso === 'principal' ? 'CP' : (caixaAtual?.nome || 'CX').slice(-2)}</div>
+            <div>
+              <span>{modoAcesso === 'principal' ? 'Principal' : caixaAtual?.operador || 'Operador'}</span>
+              <strong>{evento?.status === 'fechado' ? 'Fechado' : 'Aberto'}</strong>
+            </div>
             <button className="sair-acesso" onClick={sairAcesso}>Sair</button>
           </div>
         </aside>
@@ -696,6 +706,10 @@ export default function App() {
               <span className="eyebrow">AGENDO Eventos</span>
               <h1>{tituloPagina(pagina)}</h1>
               <p>{evento?.nome} • {modoAcesso === 'principal' ? 'Caixa Principal' : caixaAtual?.nome || 'Caixa Rápido'}</p>
+            </div>
+            <div className="topo-acoes">
+              <button className="topo-btn" onClick={() => setPagina('relatorios')}>Relatórios</button>
+              <button className="topo-btn principal" onClick={() => setPagina('vender')}>Nova venda</button>
             </div>
           </div>
 
@@ -1070,9 +1084,9 @@ function TelaAcesso({ evento, caixas, entrarComoPrincipal, entrarComoCaixa }) {
       <div className="acesso-watermark">AGENDO</div>
       <section className="acesso-panel">
         <div className="acesso-logo-row">
-          <div className="acesso-logo">AG</div>
+          <img className="acesso-agendo-logo" src={AGENDO_LOGO} alt="AGENDO" />
           <div>
-            <div className="acesso-marca">AGENDO</div>
+            <div className="acesso-marca">AGENDO Integra</div>
             <h1>Eventos</h1>
             <p>{evento?.nome || 'Sistema de caixa para eventos'}</p>
           </div>
@@ -1876,6 +1890,55 @@ tr:last-child td { border-bottom: none; }
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
+}
+
+
+/* ===== PADRÃO AGENDO INTEGRA — AJUSTE FINAL ===== */
+.app-shell { grid-template-columns: 252px 1fr; }
+.sidebar { background: rgba(255,255,255,0.54); }
+.brand { min-height: 72px; padding: 15px 16px; gap: 10px; }
+.brand-logo { width: 36px; height: 36px; object-fit: contain; flex-shrink: 0; }
+.logo { display: none; }
+.brand strong { font-size: 14px; color: #06344F; }
+.brand span { color: #82AABF; font-size: 10px; }
+.evento-card { margin: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.78); padding: 12px 13px; }
+.evento-oscard img { width: 112px; max-height: 42px; object-fit: contain; object-position: left center; margin-bottom: 8px; }
+.evento-card strong { font-size: 13px; }
+.evento-card span { font-size: 11px; }
+nav { padding: 0 0 12px; }
+nav::before { content: none; }
+.nav-secao { padding: 0; }
+.nav-secao-titulo { font-size: 9.5px; color: #B4B2A9; padding: 11px 1.1rem 3px; text-transform: uppercase; letter-spacing: .09em; font-weight: 700; }
+nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
+.nav-icone { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; color: inherit; font-size: 13px; flex-shrink: 0; }
+.rodape-side { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 9px; padding: 11px 14px; }
+.user-badge { width: 32px; height: 32px; border-radius: 50%; background: rgba(14,126,168,.13); color: #0E7EA8; display: grid; place-items: center; font-weight: 850; font-size: 11px; }
+.rodape-side span { font-size: 10.5px; color: #7D7A72; }
+.rodape-side strong { font-size: 11px; margin: 0; color: #06344F; }
+.sair-acesso { margin: 0; padding: 5px 8px; border-radius: 999px; width: auto; font-size: 10px; }
+.conteudo { padding: 1.35rem 1.65rem 2.5rem; }
+.topo { align-items: center; margin-bottom: 16px; }
+.topo h1 { font-size: 28px; }
+.topo-acoes { display: flex; gap: 8px; align-items: center; }
+.topo-btn { border: .5px solid var(--ag-border); background: rgba(255,255,255,.8); color: #5F5E5A; border-radius: 10px; padding: 9px 13px; font-size: 12px; font-weight: 700; }
+.topo-btn.principal { background: #0E7EA8; border-color: #0E7EA8; color: #fff; box-shadow: 0 8px 20px rgba(14,126,168,.16); }
+.card { border-radius: 16px; background: rgba(255,255,255,.80); box-shadow: 0 14px 34px rgba(6,52,79,.055); }
+.card.kpi { border-top: 3px solid rgba(14,126,168,.85); }
+.produto-btn { border-radius: 16px; min-height: 106px; }
+.resumo-faixa { border-radius: 16px; }
+.acesso-panel { border-radius: 26px; }
+.acesso-agendo-logo { width: 64px; height: 64px; object-fit: contain; flex-shrink: 0; }
+.acesso-logo { display: none; }
+.acesso-marca { color: #0E7EA8; }
+.acesso-opcao.principal { border-top: 3px solid #0E7EA8; }
+.acesso-opcao.caixa { border-left: 3px solid rgba(150,193,31,.65); }
+
+@media (max-width: 1000px) {
+  .app-shell { grid-template-columns: 1fr; }
+  .brand-logo { width: 34px; height: 34px; }
+  .topo-acoes { width: 100%; }
+  .topo-btn { flex: 1; }
+  .rodape-side { grid-template-columns: 32px 1fr auto; }
 }
 
 
