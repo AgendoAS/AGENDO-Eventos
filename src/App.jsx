@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { EVENTO_ID, supabase } from './lib/supabaseClient';
 
+const CATEGORIAS_FIXAS = ['Salgados', 'Doces', 'Bebidas', 'Brincadeiras', 'Geral'];
+
 const moeda = (valor) =>
   Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -300,7 +302,7 @@ export default function App() {
   const produtosVendaveis = produtos.filter((p) => p.ativo);
   const categoriasProduto = useMemo(() => {
     const set = new Set(produtosVendaveis.map((p) => p.categoria || 'Geral'));
-    return ['Todas', ...Array.from(set).sort()];
+    return ['Todas', ...CATEGORIAS_FIXAS.filter((c) => set.has(c))];
   }, [produtosVendaveis]);
   const [categoriaAtiva, setCategoriaAtiva] = useState('Todas');
   const produtosFiltrados = categoriaAtiva === 'Todas'
@@ -1164,10 +1166,10 @@ export default function App() {
                   <input placeholder="Nome do produto" value={novoProduto.nome} onChange={(e) => setNovoProduto({ ...novoProduto, nome: e.target.value })} disabled={caixaFechado} />
                   <input placeholder="Preço" inputMode="decimal" value={novoProduto.preco} onChange={(e) => setNovoProduto({ ...novoProduto, preco: e.target.value })} disabled={caixaFechado} />
                   <input placeholder="Estoque" inputMode="numeric" value={novoProduto.estoque} onChange={(e) => setNovoProduto({ ...novoProduto, estoque: e.target.value })} disabled={caixaFechado} />
-                  <input placeholder="Categoria (ex.: Doces)" list="lista-categorias" value={novoProduto.categoria} onChange={(e) => setNovoProduto({ ...novoProduto, categoria: e.target.value })} disabled={caixaFechado} />
-                  <datalist id="lista-categorias">
-                    {categoriasProduto.filter((c) => c !== 'Todas').map((c) => <option key={c} value={c} />)}
-                  </datalist>
+                  <select value={novoProduto.categoria} onChange={(e) => setNovoProduto({ ...novoProduto, categoria: e.target.value })} disabled={caixaFechado}>
+                    <option value="">Categoria...</option>
+                    {CATEGORIAS_FIXAS.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
                   <button className="botao verde" disabled={caixaFechado}>Adicionar</button>
                 </form>
               </div>
@@ -1180,7 +1182,11 @@ export default function App() {
                       {produtos.map((p) => (
                         <tr key={p.id}>
                           <td><input value={p.nome} disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, nome: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'nome', e.target.value)} /></td>
-                          <td><input value={p.categoria || ''} placeholder="Geral" list="lista-categorias" disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, categoria: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'categoria', e.target.value || 'Geral')} /></td>
+                          <td>
+                            <select value={p.categoria || 'Geral'} disabled={caixaFechado} onChange={(e) => { setProdutos(produtos.map((x) => x.id === p.id ? { ...x, categoria: e.target.value } : x)); atualizarProduto(p.id, 'categoria', e.target.value); }}>
+                              {CATEGORIAS_FIXAS.map((c) => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </td>
                           <td><input value={p.preco} disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, preco: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'preco', e.target.value)} /></td>
                           <td><input value={p.estoque_atual} disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, estoque_atual: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'estoque_atual', e.target.value)} /></td>
                           <td><span className={p.ativo ? 'pill ok' : 'pill'}>{p.ativo ? 'Ativo' : 'Inativo'}</span></td>
