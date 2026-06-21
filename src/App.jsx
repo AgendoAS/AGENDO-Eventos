@@ -118,6 +118,7 @@ export default function App() {
   const [acessoConfirmado, setAcessoConfirmado] = useState(() => localStorage.getItem('agendo_eventos_acesso_confirmado') === 'sim');
   const [caixaSelecionadoId, setCaixaSelecionadoId] = useState(() => localStorage.getItem('agendo_eventos_caixa_id') || '');
   const [papelImpressao, setPapelImpressao] = useState(() => localStorage.getItem('agendo_eventos_papel') || '58');
+  const [impressaoRawBT, setImpressaoRawBT] = useState(() => localStorage.getItem('agendo_eventos_rawbt') === '1');
   const [eventoForm, setEventoForm] = useState({ nome: '', instituicao: '', local_evento: '', data_evento: '' });
   const [novoCaixa, setNovoCaixa] = useState({ nome: '', operador: '', tipo: 'secundario' });
 
@@ -277,6 +278,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('agendo_eventos_papel', papelImpressao);
   }, [papelImpressao]);
+
+  useEffect(() => {
+    localStorage.setItem('agendo_eventos_rawbt', impressaoRawBT ? '1' : '0');
+  }, [impressaoRawBT]);
 
   useEffect(() => {
     if (!evento) return;
@@ -461,7 +466,47 @@ export default function App() {
     setMensagem('');
   }
 
+  function ehAndroid() {
+    return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
+  }
+
+  function montarFichaEscPos(item) {
+    const ESC = '\x1B';
+    const GS = '\x1D';
+    const nomeCaixa = vendaParaImprimir?.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa';
+    const numeroVenda = numero(vendaParaImprimir?.numero);
+    let cmd = '';
+    cmd += ESC + '@';                 // inicializa impressora
+    cmd += ESC + 'a' + '\x01';        // centraliza
+    cmd += GS + '!' + '\x00';         // tamanho normal
+    cmd += 'AGENDO EVENTOS\n';
+    cmd += GS + '!' + '\x11';         // dobro altura+largura
+    cmd += ESC + 'E' + '\x01';        // negrito on
+    cmd += `${item.produto || ''}\n`.toUpperCase();
+    cmd += ESC + 'E' + '\x00';        // negrito off
+    cmd += GS + '!' + '\x00';         // tamanho normal
+    cmd += `${moeda(item.valor)}\n`;
+    cmd += '--------------------------------\n';
+    cmd += `${evento?.nome || 'Evento'}\n`;
+    cmd += `${nomeCaixa} - Venda no ${numeroVenda}\n`;
+    cmd += '\n\n\n';
+    cmd += GS + 'V' + '\x00';         // corta papel
+    return cmd;
+  }
+
+  function imprimirViaRawBT() {
+    if (!fichasParaImprimir.length) return;
+    const payload = fichasParaImprimir.map(montarFichaEscPos).join('');
+    const textEncoded = encodeURI(payload);
+    const intentUrl = `intent:${textEncoded}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
+    window.location.href = intentUrl;
+  }
+
   function abrirImpressaoFichas() {
+    if (ehAndroid() && impressaoRawBT) {
+      imprimirViaRawBT();
+      return;
+    }
     document.body.classList.remove('imprimindo-relatorio');
     document.body.classList.add('imprimindo-fichas');
     const limparModo = () => document.body.classList.remove('imprimindo-fichas');
@@ -1424,6 +1469,22 @@ export default function App() {
                   <b>Atual:</b> {papelAtual.nome} • largura CSS: {papelAtual.largura}. No Chrome, use margens nenhuma, escala 100% e desative cabeçalho/rodapé.
                 </div>
               </div>
+
+              <div className="card">
+                <h2>Impressão direta no Android (RawBT)</h2>
+                <p>
+                  Se este celular for Android e tiver o app <strong>RawBT</strong> instalado e pareado com a impressora térmica,
+                  ative isso pra imprimir sem abrir a telinha de impressão do sistema — manda direto pra impressora.
+                  Em iPhone isso não tem efeito (sempre usa a tela normal de impressão).
+                </p>
+                <label className="opcao-toggle">
+                  <input type="checkbox" checked={impressaoRawBT} onChange={(e) => setImpressaoRawBT(e.target.checked)} />
+                  Usar impressão direta via RawBT neste aparelho
+                </label>
+                {impressaoRawBT && !ehAndroid() && (
+                  <p className="aviso-pagamento">Esse aparelho não parece ser Android — a opção fica salva, mas só faz efeito em celular Android com o RawBT instalado.</p>
+                )}
+              </div>
             </section>
           )}
 
@@ -2290,6 +2351,8 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; opacity:
 .opcao-card span { color: var(--ag-muted); font-size: 11px; line-height: 1.35; }
 .opcao-card.ativa { border-color: rgba(14,126,168,.35); background: rgba(14,126,168,.08); }
 .nota-config { margin-top: 12px; padding: 10px 12px; border: 0.5px solid rgba(14,126,168,.14); border-radius: 12px; background: rgba(255,255,255,.65); color: var(--ag-muted); font-size: 12px; }
+.opcao-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ag-text); margin-top: 10px; cursor: pointer; }
+.opcao-toggle input { width: 18px; height: 18px; }
 
 nav { display: flex; flex-direction: column; overflow-y: auto; padding: 4px 0 10px; }
 nav::before {
