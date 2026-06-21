@@ -107,6 +107,7 @@ export default function App() {
 
   const [colapsado, setColapsado] = useState(() => localStorage.getItem('agendo_eventos_menu_colapsado') === '1');
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1000);
+  const [online, setOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [menuAberto, setMenuAberto] = useState(false);
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [termoBusca, setTermoBusca] = useState('');
@@ -415,6 +416,17 @@ export default function App() {
     const fn = () => setIsMobile(window.innerWidth < 1000);
     window.addEventListener('resize', fn);
     return () => window.removeEventListener('resize', fn);
+  }, []);
+
+  useEffect(() => {
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -1194,6 +1206,12 @@ export default function App() {
               )}
             </div>
           </div>
+
+          {!online && (
+            <div className="mensagem erro no-print">
+              <i className="ti ti-wifi-off" /> Sem conexão com a internet — nada vai salvar até a conexão voltar. Tenta trocar de wifi/dados, ou aguarda reconectar.
+            </div>
+          )}
 
           {mensagem && (
             <div className="mensagem ok no-print mensagem-com-acao">
