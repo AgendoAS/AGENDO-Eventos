@@ -25,6 +25,21 @@ function fiadoPorPessoa(vendas) {
   return Object.values(grupos).sort((a, b) => b.total - a.total);
 }
 
+function totalPorCaixa(vendas, caixas) {
+  const validas = vendas.filter((v) => v.status !== 'cancelada');
+  return caixas.map((c) => {
+    const doCaixa = validas.filter((v) => v.caixa_id === c.id);
+    const fichas = doCaixa.reduce((s, v) => s + (v.itens || []).reduce((a, i) => a + Number(i.quantidade || 0), 0), 0);
+    return {
+      nome: c.nome,
+      operador: c.operador || '-',
+      vendas: doCaixa.length,
+      fichas,
+      total: doCaixa.reduce((s, v) => s + Number(v.total || 0), 0),
+    };
+  }).sort((a, b) => b.total - a.total);
+}
+
 const numero = (n) => String(n || 0).padStart(3, '0');
 const ficha = (n) => String(n || 0).padStart(4, '0');
 const normalizarNumero = (valor) => {
@@ -1908,8 +1923,8 @@ function Relatorio({ evento, vendas, resumo, produtos, caixas }) {
       <h3>Estoque atual</h3>
       <Tabela linhas={produtos.map((p) => [p.nome, moeda(p.preco), `Estoque: ${p.estoque_atual}`, p.ativo ? 'Ativo' : 'Inativo'])} />
 
-      <h3>Caixas</h3>
-      <Tabela linhas={caixas.map((c) => [c.nome, c.operador || '-', c.tipo])} />
+      <h3>Total por caixa</h3>
+      <Tabela linhas={totalPorCaixa(vendas, caixas).map((c) => [`${c.nome} (${c.operador})`, `${c.vendas} venda(s)`, `${c.fichas} ficha(s)`, moeda(c.total)])} vazio="Nenhuma venda registrada." />
     </div>
   );
 }
@@ -2009,6 +2024,18 @@ function RelatorioPdf({ evento, vendas, resumo, produtos, caixas, movimentacoes,
           <thead><tr><th>Produto</th><th>Preço</th><th>Estoque</th><th>Status</th></tr></thead>
           <tbody>
             {produtos.map((p) => <tr key={`pdf-estoque-${p.id}`}><td>{p.nome}</td><td>{moeda(p.preco)}</td><td>{p.estoque_atual}</td><td>{p.ativo ? 'Ativo' : 'Inativo'}</td></tr>)}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="pdf-bloco">
+        <h2>Total por caixa</h2>
+        <table>
+          <thead><tr><th>Caixa</th><th>Vendas</th><th>Fichas</th><th>Total vendido</th></tr></thead>
+          <tbody>
+            {totalPorCaixa(vendas, caixas).map((c) => (
+              <tr key={`pdf-caixa-${c.nome}`}><td>{c.nome} ({c.operador})</td><td>{c.vendas}</td><td>{c.fichas}</td><td>{moeda(c.total)}</td></tr>
+            ))}
           </tbody>
         </table>
       </section>
