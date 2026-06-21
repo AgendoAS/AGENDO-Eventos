@@ -832,10 +832,11 @@ export default function App() {
     );
   }
 
+  const colapsadoEfetivo = colapsado && !isMobile;
   const sidebarMarkup = (
     <aside className="sidebar no-print">
       <div className="brand">
-        {!colapsado && (
+        {!colapsadoEfetivo && (
           <>
             <img className="brand-logo" src={AGENDO_LOGO} alt="AGENDO" />
             <div>
@@ -844,10 +845,10 @@ export default function App() {
             </div>
           </>
         )}
-        {colapsado && !isMobile && <img className="brand-logo" src={AGENDO_LOGO} alt="AGENDO" />}
+        {colapsadoEfetivo && !isMobile && <img className="brand-logo" src={AGENDO_LOGO} alt="AGENDO" />}
         {!isMobile && (
-          <button className="colapsar-btn" onClick={toggleColapsado} title={colapsado ? 'Expandir menu' : 'Recolher menu'}>
-            <i className={`ti ti-layout-sidebar-left-${colapsado ? 'expand' : 'collapse'}`} />
+          <button className="colapsar-btn" onClick={toggleColapsado} title={colapsadoEfetivo ? 'Expandir menu' : 'Recolher menu'}>
+            <i className={`ti ti-layout-sidebar-left-${colapsadoEfetivo ? 'expand' : 'collapse'}`} />
           </button>
         )}
         {isMobile && (
@@ -857,7 +858,7 @@ export default function App() {
         )}
       </div>
 
-      {!colapsado && (
+      {!colapsadoEfetivo && (
         <div className="evento-card evento-oscard">
           <img src={CAPETTE_LOGO} alt={evento?.instituicao || 'Instituição'} />
           <small>EVENTO</small>
@@ -865,7 +866,7 @@ export default function App() {
           <span>{evento?.nome || 'Festa Junina'}</span>
         </div>
       )}
-      {!colapsado && (
+      {!colapsadoEfetivo && (
         <div className="evento-card sessao-card">
           <small>ACESSO</small>
           <strong>{modoAcesso === 'principal' ? 'Caixa Principal' : caixaAtual?.nome || 'Caixa'}</strong>
@@ -883,18 +884,18 @@ export default function App() {
           <div className="nav-secao" key={secao.titulo}>
             <div
               className="nav-secao-titulo"
-              onClick={colapsado ? undefined : () => toggleSec(secao.titulo)}
-              style={{ cursor: colapsado ? 'default' : 'pointer' }}
+              onClick={colapsadoEfetivo ? undefined : () => toggleSec(secao.titulo)}
+              style={{ cursor: colapsadoEfetivo ? 'default' : 'pointer' }}
             >
-              {!colapsado && secao.titulo}
-              {!colapsado && (
+              {!colapsadoEfetivo && secao.titulo}
+              {!colapsadoEfetivo && (
                 <i className={`ti ti-chevron-${secVisivel(secao.titulo) ? 'down' : 'right'}`} />
               )}
             </div>
             {secVisivel(secao.titulo) && secao.itens.map(([id, label]) => (
-              <button key={id} className={pagina === id ? 'ativo' : ''} title={colapsado ? label : undefined} onClick={() => { setPagina(id); fecharMenu(); }}>
+              <button key={id} className={pagina === id ? 'ativo' : ''} title={colapsadoEfetivo ? label : undefined} onClick={() => { setPagina(id); fecharMenu(); }}>
                 <i className={`ti ti-${MENU_ICONS[id] || 'circle'} nav-icone`} />
-                {!colapsado && <span>{label}</span>}
+                {!colapsadoEfetivo && <span>{label}</span>}
               </button>
             ))}
           </div>
@@ -903,13 +904,13 @@ export default function App() {
 
       <div className="rodape-side">
         <div className="user-badge">{modoAcesso === 'principal' ? 'CP' : (caixaAtual?.nome || 'CX').slice(-2)}</div>
-        {!colapsado && (
+        {!colapsadoEfetivo && (
           <div className="user-info">
             <span>{modoAcesso === 'principal' ? 'Principal' : caixaAtual?.operador || 'Operador'}</span>
             <strong>{evento?.status === 'fechado' ? 'Fechado' : 'Aberto'}</strong>
           </div>
         )}
-        {!colapsado && (
+        {!colapsadoEfetivo && (
           <div className="side-actions">
             <button className="sair-acesso" onClick={sairAcesso} title="Trocar acesso"><i className="ti ti-replace" /></button>
             <button className="sair-acesso danger" onClick={sairSistema} title="Sair"><i className="ti ti-logout" /></button>
@@ -2728,7 +2729,14 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
   overflow-y: auto; background: rgba(255,255,255,0.98); backdrop-filter: blur(12px);
   animation: drawerIn .22s cubic-bezier(.2,.8,.3,1);
 }
-.drawer-mobile .sidebar { width: 240px; height: 100%; }
+.drawer-mobile .sidebar {
+  width: 240px;
+  height: 100%;
+  position: static;
+  top: auto;
+  backdrop-filter: none;
+  background: transparent;
+}
 .topo-mobile {
   display: flex; align-items: center; gap: 10px; padding: .6rem 1rem;
   background: rgba(255,255,255,0.92); border-bottom: 0.5px solid #E8E6DE; margin: -1.35rem -1.65rem 1rem;
