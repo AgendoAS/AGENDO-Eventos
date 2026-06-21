@@ -470,26 +470,35 @@ export default function App() {
     return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
   }
 
+  function paraTextoTermico(texto) {
+    return String(texto || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos (á->a, ç->c, etc.)
+      .replace(/\u00a0/g, ' ')   // espaço "não-quebra-linha" -> espaço normal
+      .replace(/[^\x00-\x7F]/g, ''); // remove qualquer outro caractere fora do padrão ASCII (evita lixo na térmica)
+  }
+
   function montarFichaEscPos(item, vendaRef) {
     const ESC = '\x1B';
     const GS = '\x1D';
-    const nomeCaixa = vendaRef?.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa';
+    const nomeCaixa = paraTextoTermico(vendaRef?.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa');
     const numeroVenda = numero(vendaRef?.numero);
     let cmd = '';
     cmd += ESC + '@';                 // inicializa impressora
+    cmd += '\n\n';                    // respiro no topo
     cmd += ESC + 'a' + '\x01';        // centraliza
     cmd += GS + '!' + '\x00';         // tamanho normal
-    cmd += 'AGENDO EVENTOS\n';
+    cmd += 'AGENDO EVENTOS\n\n';
     cmd += GS + '!' + '\x11';         // dobro altura+largura
     cmd += ESC + 'E' + '\x01';        // negrito on
-    cmd += `${item.produto || ''}\n`.toUpperCase();
+    cmd += `${paraTextoTermico(item.produto)}\n`.toUpperCase();
     cmd += ESC + 'E' + '\x00';        // negrito off
     cmd += GS + '!' + '\x00';         // tamanho normal
-    cmd += `${moeda(item.valor)}\n`;
-    cmd += '--------------------------------\n';
-    cmd += `${evento?.nome || 'Evento'}\n`;
+    cmd += '\n';
+    cmd += `${paraTextoTermico(moeda(item.valor))}\n\n`;
+    cmd += '--------------------------------\n\n';
+    cmd += `${paraTextoTermico(evento?.nome || 'Evento')}\n`;
     cmd += `${nomeCaixa} - Venda no ${numeroVenda}\n`;
-    cmd += '\n\n\n';
+    cmd += '\n\n\n\n\n\n';            // espaço extra antes do corte
     cmd += GS + 'V' + '\x00';         // corta papel
     return cmd;
   }
