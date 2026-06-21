@@ -470,11 +470,11 @@ export default function App() {
     return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
   }
 
-  function montarFichaEscPos(item) {
+  function montarFichaEscPos(item, vendaRef) {
     const ESC = '\x1B';
     const GS = '\x1D';
-    const nomeCaixa = vendaParaImprimir?.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa';
-    const numeroVenda = numero(vendaParaImprimir?.numero);
+    const nomeCaixa = vendaRef?.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa';
+    const numeroVenda = numero(vendaRef?.numero);
     let cmd = '';
     cmd += ESC + '@';                 // inicializa impressora
     cmd += ESC + 'a' + '\x01';        // centraliza
@@ -494,17 +494,30 @@ export default function App() {
     return cmd;
   }
 
-  function imprimirViaRawBT() {
-    if (!fichasParaImprimir.length) return;
-    const payload = fichasParaImprimir.map(montarFichaEscPos).join('');
+  function montarFichasDeVenda(vendaRef) {
+    const itens = [];
+    (vendaRef?.itens || []).forEach((item) => {
+      const inicio = Number(item.ficha_inicio || 0);
+      const fim = Number(item.ficha_fim || inicio);
+      for (let n = inicio; n <= fim; n += 1) {
+        itens.push({ numero: n, produto: item.nome_produto, valor: Number(item.preco_unitario || 0) });
+      }
+    });
+    return itens;
+  }
+
+  function imprimirViaRawBT(vendaRef) {
+    const fichas = montarFichasDeVenda(vendaRef);
+    if (!fichas.length) return;
+    const payload = fichas.map((item) => montarFichaEscPos(item, vendaRef)).join('');
     const textEncoded = encodeURI(payload);
     const intentUrl = `intent:${textEncoded}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
     window.location.href = intentUrl;
   }
 
-  function abrirImpressaoFichas() {
+  function abrirImpressaoFichas(vendaRef) {
     if (ehAndroid() && impressaoRawBT) {
-      imprimirViaRawBT();
+      imprimirViaRawBT(vendaRef || vendaParaImprimir);
       return;
     }
     document.body.classList.remove('imprimindo-relatorio');
@@ -545,11 +558,13 @@ export default function App() {
       if (error) throw error;
       const resultado = Array.isArray(data) ? data[0] : data;
       const vendaId = resultado?.venda_id || null;
+      let vendaCompleta = null;
 
       if (vendaId) {
-        const vendaCompleta = await buscarVendaParaImpressao(vendaId);
+        vendaCompleta = await buscarVendaParaImpressao(vendaId);
         setVendaImpressaoDireta(vendaCompleta);
         setVendaImpressaoId(vendaId);
+        abrirImpressaoFichas(vendaCompleta);
       }
 
       setMensagem(`Venda ${numero(resultado?.numero)} finalizada. Imprimindo fichas ${ficha(resultado?.primeira_ficha)} a ${ficha(resultado?.ultima_ficha)}.`);
@@ -559,10 +574,6 @@ export default function App() {
       setPessoaFiadoSelecionada('');
       await carregarTudo();
       setPagina('vendas');
-
-      if (vendaId) {
-        setTimeout(() => abrirImpressaoFichas(), 350);
-      }
     } catch (e) {
       setErro(e.message || 'Erro ao finalizar venda.');
     } finally {
@@ -576,7 +587,7 @@ export default function App() {
       const vendaCompleta = await buscarVendaParaImpressao(vendaId);
       setVendaImpressaoDireta(vendaCompleta);
       setVendaImpressaoId(vendaId);
-      setTimeout(() => abrirImpressaoFichas(), 250);
+      abrirImpressaoFichas(vendaCompleta);
     } catch (e) {
       setErro(e.message || 'Erro ao preparar impressão da venda.');
     }
