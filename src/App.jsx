@@ -2726,7 +2726,7 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; animation: fadeIn .18s ease; }
 .drawer-mobile {
   position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; width: 240px;
-  overflow-y: auto; background: rgba(255,255,255,0.98); backdrop-filter: blur(12px);
+  overflow-y: auto; background: #FCFBF8;
   animation: drawerIn .22s cubic-bezier(.2,.8,.3,1);
 }
 .drawer-mobile .sidebar {
