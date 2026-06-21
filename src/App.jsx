@@ -1816,6 +1816,8 @@ body {
   letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 button, input, select { font: inherit; }
 button { cursor: pointer; transition: transform .08s ease, filter .15s ease, border-color .15s ease; }
@@ -2727,6 +2729,8 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
   animation: drawerIn .22s cubic-bezier(.2,.8,.3,1);
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 .drawer-mobile-inner {
   height: 100%; width: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
