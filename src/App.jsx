@@ -953,16 +953,7 @@ export default function App() {
           </div>
         )}
 
-        {!isMobile && sidebarMarkup}
-
-        {isMobile && menuAberto && (
-          <>
-            <div className="drawer-overlay" onClick={() => setMenuAberto(false)} />
-            <div className="drawer-mobile">
-              <div className="drawer-mobile-inner">{sidebarMarkup}</div>
-            </div>
-          </>
-        )}
+        {(!isMobile || menuAberto) && sidebarMarkup}
 
         <main className="conteudo">
           {isMobile && (
@@ -2770,7 +2761,16 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 
 @media (max-width: 1000px) {
   .app-shell { grid-template-columns: 1fr; }
-  .app-shell .sidebar { display: none; }
+  .app-shell .sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 70vh;
+    position: relative;
+    top: auto;
+    backdrop-filter: none;
+    background: #FCFBF8;
+    border-bottom: 2px solid var(--ag-border);
+  }
 }
 
 `;
