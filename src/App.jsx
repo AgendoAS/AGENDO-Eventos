@@ -12,6 +12,19 @@ function ePromo(linhaProduto, produtos) {
   return Number(linhaProduto.precoUnit).toFixed(2) !== Number(produto.preco).toFixed(2);
 }
 
+function fiadoPorPessoa(vendas) {
+  const grupos = vendas
+    .filter((v) => v.status !== 'cancelada' && v.forma_pagamento === 'Fiado')
+    .reduce((acc, v) => {
+      const chave = v.pessoa_fiado || 'Sem nome';
+      if (!acc[chave]) acc[chave] = { nome: chave, qtdVendas: 0, total: 0 };
+      acc[chave].qtdVendas += 1;
+      acc[chave].total += Number(v.total || 0);
+      return acc;
+    }, {});
+  return Object.values(grupos).sort((a, b) => b.total - a.total);
+}
+
 const numero = (n) => String(n || 0).padStart(3, '0');
 const ficha = (n) => String(n || 0).padStart(4, '0');
 const normalizarNumero = (valor) => {
@@ -39,6 +52,7 @@ const MENU_ICONS = {
   dados: 'building-community',
   impressora: 'printer',
   caixas: 'users-group',
+  fiado: 'users',
   backup: 'database-export',
   config: 'settings',
   'minhas-vendas': 'receipt-2',
@@ -49,6 +63,9 @@ export default function App() {
   const [evento, setEvento] = useState(null);
   const [produtos, setProdutos] = useState([]);
   const [caixas, setCaixas] = useState([]);
+  const [fiadoPessoas, setFiadoPessoas] = useState([]);
+  const [novaPessoaFiado, setNovaPessoaFiado] = useState('');
+  const [pessoaFiadoSelecionada, setPessoaFiadoSelecionada] = useState('');
   const [vendas, setVendas] = useState([]);
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -114,6 +131,14 @@ export default function App() {
         .order('nome', { ascending: true });
       if (caixasError) throw caixasError;
       setCaixas(caixasData || []);
+
+      const { data: fiadoData, error: fiadoError } = await supabase
+        .from('fiado_pessoas')
+        .select('*')
+        .eq('evento_id', EVENTO_ID)
+        .order('nome', { ascending: true });
+      if (fiadoError) throw fiadoError;
+      setFiadoPessoas(fiadoData || []);
 
       await carregarVendas(caixasData || []);
       await carregarMovimentacoes(caixasData || []);
@@ -327,7 +352,9 @@ export default function App() {
   const totalCarrinho = carrinho.reduce((s, item) => s + normalizarNumero(item.preco) * item.quantidade, 0);
   const qtdCarrinho = carrinho.reduce((s, item) => s + item.quantidade, 0);
   const troco = pagamento === 'Dinheiro' ? Math.max(normalizarNumero(valorRecebido) - totalCarrinho, 0) : 0;
-  const podeFinalizarVenda = carrinho.length > 0 && caixaAtual && !caixaFechado && !salvandoVenda && (pagamento !== 'Dinheiro' || normalizarNumero(valorRecebido) >= totalCarrinho);
+  const podeFinalizarVenda = carrinho.length > 0 && caixaAtual && !caixaFechado && !salvandoVenda
+    && (pagamento !== 'Dinheiro' || normalizarNumero(valorRecebido) >= totalCarrinho)
+    && (pagamento !== 'Fiado' || pessoaFiadoSelecionada);
   const papeisImpressao = {
     '58': { nome: '58mm / 57,5mm', largura: '58mm', descricao: 'Padrão para impressora térmica 58mm.' },
     '80': { nome: '80mm / 79,5mm', largura: '80mm', descricao: 'Mais largo, bom para recibos maiores.' },
@@ -413,6 +440,7 @@ export default function App() {
     setCarrinho([]);
     setPagamento('Pix');
     setValorRecebido('');
+    setPessoaFiadoSelecionada('');
     setErro('');
     setMensagem('');
   }
@@ -450,6 +478,7 @@ export default function App() {
         p_forma_pagamento: pagamento,
         p_valor_recebido: pagamento === 'Dinheiro' ? normalizarNumero(valorRecebido) : null,
         p_itens: itens,
+        p_pessoa_fiado: pagamento === 'Fiado' ? pessoaFiadoSelecionada : null,
       });
 
       if (error) throw error;
@@ -466,6 +495,7 @@ export default function App() {
       setCarrinho([]);
       setPagamento('Pix');
       setValorRecebido('');
+      setPessoaFiadoSelecionada('');
       await carregarTudo();
       setPagina('vendas');
 
@@ -641,6 +671,25 @@ export default function App() {
     carregarTudo();
   }
 
+  async function adicionarPessoaFiado(e) {
+    e.preventDefault();
+    const nome = novaPessoaFiado.trim();
+    if (!nome) return aviso('Digite o nome da pessoa.');
+    const { data, error } = await supabase.from('fiado_pessoas').insert({ evento_id: EVENTO_ID, nome, ativo: true }).select();
+    if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Não foi possível salvar (possível bloqueio de permissão).');
+    setNovaPessoaFiado('');
+    aviso(`"${nome}" cadastrado(a) para fiado.`);
+    carregarTudo();
+  }
+
+  async function alternarPessoaFiado(pessoa) {
+    const { data, error } = await supabase.from('fiado_pessoas').update({ ativo: !pessoa.ativo }).eq('id', pessoa.id).select();
+    if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Não foi possível atualizar (possível bloqueio de permissão).');
+    carregarTudo();
+  }
+
   function imprimirRelatorio() {
     document.body.classList.remove('imprimindo-fichas');
     document.body.classList.add('imprimindo-relatorio');
@@ -808,7 +857,7 @@ export default function App() {
   const menuPrincipalSecoes = [
     { titulo: 'Principal', itens: [['painel', 'Painel geral']] },
     { titulo: 'Operação diária', itens: [['vender', 'Vender fichas'], ['produtos', 'Produtos e estoque'], ['vendas', 'Vendas realizadas']] },
-    { titulo: 'Gestão do evento', itens: [['fechamento', 'Fechamento'], ['movimentacoes', 'Sangria / reforço'], ['dados', 'Dados do evento'], ['caixas', 'Caixas e operadores']] },
+    { titulo: 'Gestão do evento', itens: [['fechamento', 'Fechamento'], ['movimentacoes', 'Sangria / reforço'], ['dados', 'Dados do evento'], ['caixas', 'Caixas e operadores'], ['fiado', 'Pessoas do fiado']] },
     { titulo: 'Relatórios', itens: [['relatorios', 'Relatórios']] },
     { titulo: 'Configurações', itens: [['impressora', 'Config. impressora'], ['backup', 'Backup / exportação'], ['config', 'Configurações']] },
   ];
@@ -1188,7 +1237,17 @@ export default function App() {
                   ))}
                 </div>
                 {pagamento === 'Fiado' && (
-                  <p className="aviso-pagamento">A venda entra no total, mas não soma no "dinheiro esperado" do fechamento até ser recebida. Marque como recebida em "Vendas" quando a pessoa pagar.</p>
+                  <div className="fiado-pessoa-box">
+                    <label className="label">De quem é o fiado?</label>
+                    <select value={pessoaFiadoSelecionada} onChange={(e) => setPessoaFiadoSelecionada(e.target.value)}>
+                      <option value="">Selecione a pessoa...</option>
+                      {fiadoPessoas.filter((p) => p.ativo).map((p) => <option key={p.id} value={p.nome}>{p.nome}</option>)}
+                    </select>
+                    {fiadoPessoas.filter((p) => p.ativo).length === 0 && (
+                      <p className="aviso-pagamento">Nenhuma pessoa cadastrada ainda. Peça pro Caixa Principal cadastrar em "Pessoas do fiado".</p>
+                    )}
+                    <p className="aviso-pagamento">A venda entra no total, mas não soma no "dinheiro esperado" do fechamento até ser recebida. Marque como recebida em "Vendas" quando a pessoa pagar.</p>
+                  </div>
                 )}
                 {pagamento === 'Cortesia' && (
                   <p className="aviso-pagamento">Venda registrada como cortesia: fichas saem com valor R$ 0,00 e não entram no total vendido.</p>
@@ -1354,6 +1413,44 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </section>
+          )}
+
+          {pagina === 'fiado' && (
+            <section className="stack">
+              <div className="card no-print">
+                <h2>Cadastrar pessoa para fiado</h2>
+                <p>Só quem estiver nesta lista aparece pro caixa escolher na hora de vender fiado.</p>
+                <form className="linha-form" onSubmit={adicionarPessoaFiado}>
+                  <input placeholder="Nome da pessoa" value={novaPessoaFiado} onChange={(e) => setNovaPessoaFiado(e.target.value)} />
+                  <button className="botao verde">Adicionar</button>
+                </form>
+              </div>
+              <div className="card">
+                <h2>Pessoas cadastradas</h2>
+                <div className="tabela-scroll">
+                  <table>
+                    <thead><tr><th>Nome</th><th>Status</th><th>Ação</th></tr></thead>
+                    <tbody>
+                      {fiadoPessoas.length ? fiadoPessoas.map((p) => (
+                        <tr key={p.id}>
+                          <td>{p.nome}</td>
+                          <td><span className={p.ativo ? 'pill ok' : 'pill'}>{p.ativo ? 'Ativo' : 'Inativo'}</span></td>
+                          <td><button className="mini" onClick={() => alternarPessoaFiado(p)}>{p.ativo ? 'Desativar' : 'Ativar'}</button></td>
+                        </tr>
+                      )) : <tr><td colSpan="3">Nenhuma pessoa cadastrada ainda.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="card">
+                <h2>A receber — por pessoa</h2>
+                <p>Soma das vendas em fiado ainda não marcadas como recebidas, agrupadas por pessoa.</p>
+                <Tabela
+                  linhas={fiadoPorPessoa(vendas).map((p) => [p.nome, `${p.qtdVendas} venda(s)`, moeda(p.total)])}
+                  vazio="Ninguém deve nada no momento. 🎉"
+                />
               </div>
             </section>
           )}
@@ -1706,6 +1803,7 @@ function tituloPagina(pagina) {
     dados: 'Dados do evento',
     impressora: 'Configuração da impressora',
     caixas: 'Caixas / operadores',
+    fiado: 'Pessoas do fiado',
     backup: 'Backup / exportação',
     config: 'Configurações',
     acesso: 'Trocar acesso',
@@ -1804,6 +1902,9 @@ function Relatorio({ evento, vendas, resumo, produtos, caixas }) {
       <h3>Produtos vendidos na promoção</h3>
       <Tabela linhas={resumo.porProduto.filter((p) => ePromo(p, produtos)).map((p) => [`${p.nome} (${moeda(p.precoUnit)} cada)`, `${p.qtd} ficha(s)`, moeda(p.valor)])} vazio="Nenhuma venda em promoção." />
 
+      <h3>Fiado — a receber por pessoa</h3>
+      <Tabela linhas={fiadoPorPessoa(vendas).map((p) => [p.nome, `${p.qtdVendas} venda(s)`, moeda(p.total)])} vazio="Ninguém deve nada no momento." />
+
       <h3>Estoque atual</h3>
       <Tabela linhas={produtos.map((p) => [p.nome, moeda(p.preco), `Estoque: ${p.estoque_atual}`, p.ativo ? 'Ativo' : 'Inativo'])} />
 
@@ -1886,6 +1987,18 @@ function RelatorioPdf({ evento, vendas, resumo, produtos, caixas, movimentacoes,
             {resumo.porProduto.filter((p) => ePromo(p, produtos)).length ? resumo.porProduto.filter((p) => ePromo(p, produtos)).map((p) => (
               <tr key={`pdf-promo-${p.nome}-${p.precoUnit}`}><td>{p.nome}</td><td>{moeda(p.precoUnit)}</td><td>{p.qtd}</td><td>{moeda(p.valor)}</td></tr>
             )) : <tr><td colSpan="4">Nenhuma venda em promoção.</td></tr>}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="pdf-bloco">
+        <h2>Fiado — a receber por pessoa</h2>
+        <table>
+          <thead><tr><th>Pessoa</th><th>Vendas</th><th>Total a receber</th></tr></thead>
+          <tbody>
+            {fiadoPorPessoa(vendas).length ? fiadoPorPessoa(vendas).map((p) => (
+              <tr key={`pdf-fiado-${p.nome}`}><td>{p.nome}</td><td>{p.qtdVendas}</td><td>{moeda(p.total)}</td></tr>
+            )) : <tr><td colSpan="3">Ninguém deve nada no momento.</td></tr>}
           </tbody>
         </table>
       </section>
@@ -2285,6 +2398,8 @@ nav button.ativo { color: var(--ag-blue); background: rgba(14,126,168,0.08); bor
 .label { display: block; font-weight: 850; color: var(--ag-muted); margin: 12px 0 7px; font-size: 11px; }
 .pagamentos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .aviso-pagamento { font-size: 11px; color: #7D7A72; background: rgba(255,200,0,.08); border: 0.5px solid rgba(230,150,20,.25); border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
+.fiado-pessoa-box { margin-top: 8px; }
+.fiado-pessoa-box select { width: 100%; margin-bottom: 6px; }
 .pagamentos button {
   border: 0.5px solid var(--ag-border);
   background: rgba(255,255,255,0.82);
