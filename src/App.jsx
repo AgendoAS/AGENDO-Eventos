@@ -1253,7 +1253,7 @@ export default function App() {
                 </div>
                 <button className="botao" onClick={carregarTudo}>Atualizar</button>
               </div>
-              <TabelaVendas vendas={vendasDaTela} marcarImpressa={marcarImpressa} imprimirVenda={imprimirVenda} cancelarVenda={cancelarVenda} caixaFechado={caixaFechado} permitirCancelar={false} isMobile={isMobile} />
+              <TabelaVendas vendas={vendasDaTela} marcarImpressa={marcarImpressa} imprimirVenda={imprimirVenda} cancelarVenda={cancelarVenda} caixaFechado={caixaFechado} permitirCancelar={true} isMobile={isMobile} />
             </section>
           )}
 
@@ -1711,12 +1711,11 @@ function TabelaVendas({ vendas, marcarImpressa, imprimirVenda, cancelarVenda, ca
               <span className={v.status === 'cancelada' ? 'pill erro' : 'pill ok'}>{v.status}</span>
             </div>
             <div className="venda-card-itens">
-              {(v.itens || []).map((i) => `${i.quantidade}× ${i.nome_produto}`).join(' · ')}
+              {(v.itens || []).map((i) => `${i.quantidade}× ${i.nome_produto} (${moeda(i.preco_unitario)})`).join(' · ')}
             </div>
             <div className="venda-card-acoes">
               <button className="mini" onClick={() => imprimirVenda(v.id)}>Reimprimir</button>
-              {v.impresso ? <span className="pill ok">Impresso</span> : <button className="mini" onClick={() => marcarImpressa(v)}>Marcar impresso</button>}
-              {permitirCancelar && v.status !== 'cancelada' && <button className="mini perigo" disabled={caixaFechado} onClick={() => cancelarVenda(v)}>Cancelar</button>}
+              {permitirCancelar && v.status !== 'cancelada' && <button className="mini perigo" disabled={caixaFechado} onClick={() => cancelarVenda(v)}>Cancelar venda</button>}
             </div>
           </div>
         ))}
@@ -2880,10 +2879,11 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 }
 .categorias-tabs button.ativo { background: #96C11F; border-color: #96C11F; color: #fff; }
 
-.produto-btn.em-promocao { border: 1.5px solid #E63214; background: rgba(230,50,20,0.05); position: relative; }
-.selo-promo {
-  position: absolute; top: -8px; right: 10px; background: #E63214; color: #fff;
-  font-size: 9px; font-weight: 800; letter-spacing: .04em; padding: 3px 8px; border-radius: 999px;
+.produto-btn.em-promocao { border: 1.5px solid #E63214; background: rgba(230,50,20,0.05); position: relative; padding-top: 22px; }
+.produto-btn .selo-promo {
+  display: inline-flex !important; position: absolute; top: 6px; right: 6px; background: #E63214; color: #fff;
+  font-size: 8.5px !important; font-weight: 800; letter-spacing: .03em; padding: 2px 7px; border-radius: 999px;
+  line-height: 1.6;
 }
 .preco-promo { display: flex; align-items: baseline; gap: 6px; }
 .preco-promo s { font-size: 11px; color: #B4B2A9; font-weight: 400; }
