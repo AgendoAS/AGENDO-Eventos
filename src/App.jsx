@@ -1124,7 +1124,16 @@ export default function App() {
             </div>
           </div>
 
-          {mensagem && <div className="mensagem ok no-print">{mensagem}</div>}
+          {mensagem && (
+            <div className="mensagem ok no-print mensagem-com-acao">
+              <span>{mensagem}</span>
+              {vendaImpressaoDireta && (
+                <button className="botao verde mini-print" onClick={abrirImpressaoFichas}>
+                  <i className="ti ti-printer" /> Imprimir agora
+                </button>
+              )}
+            </div>
+          )}
           {erro && <div className="mensagem erro no-print">{erro}</div>}
 
           {!(isMobile && modoAcesso === 'caixa' && pagina === 'vender') && (
@@ -2374,6 +2383,9 @@ nav button.ativo { color: var(--ag-blue); background: rgba(14,126,168,0.08); bor
 }
 .mensagem.ok { background: rgba(150,193,31,0.12); color: #55710B; border: 0.5px solid rgba(150,193,31,0.35); }
 .mensagem.erro { background: rgba(230,50,20,0.08); border: 0.5px solid rgba(230,50,20,0.25); color: var(--ag-red); }
+.mensagem-com-acao { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.mini-print { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 11.5px; flex-shrink: 0; }
+.mini-print i { font-size: 14px; }
 .resumo-faixa {
   display: flex;
   flex-wrap: wrap;
