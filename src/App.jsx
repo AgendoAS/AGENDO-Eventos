@@ -6,6 +6,12 @@ const CATEGORIAS_FIXAS = ['Salgados', 'Doces', 'Bebidas', 'Brincadeiras', 'Geral
 const moeda = (valor) =>
   Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+function ePromo(linhaProduto, produtos) {
+  const produto = produtos.find((p) => p.nome === linhaProduto.nome);
+  if (!produto) return false;
+  return Number(linhaProduto.precoUnit).toFixed(2) !== Number(produto.preco).toFixed(2);
+}
+
 const numero = (n) => String(n || 0).padStart(3, '0');
 const ficha = (n) => String(n || 0).padStart(4, '0');
 const normalizarNumero = (valor) => {
@@ -17,7 +23,7 @@ const normalizarNumero = (valor) => {
 const hojeBR = () =>
   new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
 
-const formas = ['Pix', 'Dinheiro', 'Débito', 'Crédito', 'Cartão'];
+const formas = ['Pix', 'Dinheiro', 'Débito', 'Crédito', 'Fiado', 'Cortesia'];
 
 const AGENDO_LOGO = '/agendo-logo.png';
 const AGENDO_TEXTO = '/agendo-texto.png';
@@ -278,6 +284,8 @@ export default function App() {
       .reduce((s, m) => s + Number(m.valor || 0), 0);
     const dinheiroVendas = Number(porForma.Dinheiro || 0);
     const dinheiroEsperado = dinheiroVendas + reforcos - sangrias;
+    const totalFiado = Number(porForma.Fiado || 0);
+    const totalCortesia = Number(porForma.Cortesia || 0);
 
     return {
       totalVendido,
@@ -289,6 +297,8 @@ export default function App() {
       sangrias,
       dinheiroEsperado,
       dinheiroVendas,
+      totalFiado,
+      totalCortesia,
     };
   }, [vendas, vendasValidas, movimentacoes]);
 
@@ -615,6 +625,19 @@ export default function App() {
 
     if (error) return setErro(error.message);
     aviso(`Venda ${numero(venda.numero)} cancelada. Estoque devolvido.`);
+    carregarTudo();
+  }
+
+  async function marcarFiadoRecebido(venda) {
+    const opcoes = ['Pix', 'Dinheiro', 'Débito', 'Crédito'];
+    const resposta = prompt(`Como a venda ${numero(venda.numero)} foi paga agora? Digite: ${opcoes.join(', ')}`);
+    if (!resposta) return;
+    const formaEscolhida = opcoes.find((o) => o.toLowerCase() === resposta.trim().toLowerCase());
+    if (!formaEscolhida) return aviso('Forma de pagamento não reconhecida. Tente de novo digitando exatamente uma das opções.');
+    const { data, error } = await supabase.from('vendas').update({ forma_pagamento: formaEscolhida }).eq('id', venda.id).select();
+    if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Não foi possível atualizar (possível bloqueio de permissão).');
+    aviso(`Venda ${numero(venda.numero)} marcada como recebida via ${formaEscolhida}.`);
     carregarTudo();
   }
 
@@ -1078,6 +1101,7 @@ export default function App() {
               <Card titulo="Dinheiro esperado" valor={moeda(resumo.dinheiroEsperado)} texto="Dinheiro + reforço - sangria" />
               <Card titulo="Fichas geradas" valor={resumo.fichas} texto="Numeração contínua" />
               <Card titulo="Canceladas" valor={moeda(resumo.totalCancelado)} texto="Não entram no fechamento" />
+              <Card titulo="A receber (fiado)" valor={moeda(resumo.totalFiado)} texto="Ainda não recebido em caixa" />
               <div className="card span2">
                 <h2>Por forma de pagamento</h2>
                 <Tabela linhas={formas.filter((f) => resumo.porForma[f]).map((f) => [f, moeda(resumo.porForma[f])])} />
@@ -1159,10 +1183,16 @@ export default function App() {
 
                 <label className="label">Pagamento</label>
                 <div className="pagamentos">
-                  {['Pix', 'Dinheiro', 'Débito', 'Crédito'].map((forma) => (
+                  {['Pix', 'Dinheiro', 'Débito', 'Crédito', 'Fiado', 'Cortesia'].map((forma) => (
                     <button key={forma} className={pagamento === forma ? 'ativo' : ''} onClick={() => setPagamento(forma)}>{forma}</button>
                   ))}
                 </div>
+                {pagamento === 'Fiado' && (
+                  <p className="aviso-pagamento">A venda entra no total, mas não soma no "dinheiro esperado" do fechamento até ser recebida. Marque como recebida em "Vendas" quando a pessoa pagar.</p>
+                )}
+                {pagamento === 'Cortesia' && (
+                  <p className="aviso-pagamento">Venda registrada como cortesia: fichas saem com valor R$ 0,00 e não entram no total vendido.</p>
+                )}
 
                 {pagamento === 'Dinheiro' && (
                   <div className="troco-box">
@@ -1239,7 +1269,7 @@ export default function App() {
                 </div>
                 <button className="botao" onClick={carregarTudo}>Atualizar</button>
               </div>
-              <TabelaVendas vendas={vendas} marcarImpressa={marcarImpressa} imprimirVenda={imprimirVenda} cancelarVenda={cancelarVenda} caixaFechado={caixaFechado} isMobile={isMobile} />
+              <TabelaVendas vendas={vendas} marcarImpressa={marcarImpressa} imprimirVenda={imprimirVenda} cancelarVenda={cancelarVenda} caixaFechado={caixaFechado} isMobile={isMobile} marcarFiadoRecebido={marcarFiadoRecebido} />
             </section>
           )}
 
@@ -1253,7 +1283,7 @@ export default function App() {
                 </div>
                 <button className="botao" onClick={carregarTudo}>Atualizar</button>
               </div>
-              <TabelaVendas vendas={vendasDaTela} marcarImpressa={marcarImpressa} imprimirVenda={imprimirVenda} cancelarVenda={cancelarVenda} caixaFechado={caixaFechado} permitirCancelar={true} isMobile={isMobile} />
+              <TabelaVendas vendas={vendasDaTela} marcarImpressa={marcarImpressa} imprimirVenda={imprimirVenda} cancelarVenda={cancelarVenda} caixaFechado={caixaFechado} permitirCancelar={true} isMobile={isMobile} marcarFiadoRecebido={marcarFiadoRecebido} />
             </section>
           )}
 
@@ -1691,7 +1721,7 @@ function Tabela({ linhas, vazio }) {
   return <div className="tabela-scroll"><table><tbody>{linhas.map((l, idx) => <tr key={idx}>{l.map((c, i) => <td key={i}>{c}</td>)}</tr>)}</tbody></table></div>;
 }
 
-function TabelaVendas({ vendas, marcarImpressa, imprimirVenda, cancelarVenda, caixaFechado, permitirCancelar = true, isMobile = false }) {
+function TabelaVendas({ vendas, marcarImpressa, imprimirVenda, cancelarVenda, caixaFechado, permitirCancelar = true, isMobile = false, marcarFiadoRecebido }) {
   if (!vendas.length) return <p className="vazio">Nenhuma venda ainda.</p>;
 
   if (isMobile) {
@@ -1715,6 +1745,7 @@ function TabelaVendas({ vendas, marcarImpressa, imprimirVenda, cancelarVenda, ca
             </div>
             <div className="venda-card-acoes">
               <button className="mini" onClick={() => imprimirVenda(v.id)}>Reimprimir</button>
+              {v.forma_pagamento === 'Fiado' && v.status !== 'cancelada' && <button className="mini verde" onClick={() => marcarFiadoRecebido(v)}>Marcar recebido</button>}
               {permitirCancelar && v.status !== 'cancelada' && <button className="mini perigo" disabled={caixaFechado} onClick={() => cancelarVenda(v)}>Cancelar venda</button>}
             </div>
           </div>
@@ -1737,7 +1768,7 @@ function TabelaVendas({ vendas, marcarImpressa, imprimirVenda, cancelarVenda, ca
               <td>{(v.itens || []).map((i) => `${i.quantidade}× ${i.nome_produto} • fichas ${numero(i.ficha_inicio)}-${numero(i.ficha_fim)}`).join(' | ')}</td>
               <td>{moeda(v.total)}</td>
               <td><span className={v.status === 'cancelada' ? 'pill erro' : 'pill ok'}>{v.status}</span></td>
-              <td><div className="acoes-linha"><button className="mini" onClick={() => imprimirVenda(v.id)}>Reimprimir</button>{v.impresso ? <span className="pill ok">Impresso</span> : <button className="mini" onClick={() => marcarImpressa(v)}>Marcar impresso</button>}{permitirCancelar && v.status !== 'cancelada' && <button className="mini perigo" disabled={caixaFechado} onClick={() => cancelarVenda(v)}>Cancelar</button>}</div></td>
+              <td><div className="acoes-linha"><button className="mini" onClick={() => imprimirVenda(v.id)}>Reimprimir</button>{v.impresso ? <span className="pill ok">Impresso</span> : <button className="mini" onClick={() => marcarImpressa(v)}>Marcar impresso</button>}{v.forma_pagamento === 'Fiado' && v.status !== 'cancelada' && <button className="mini verde" onClick={() => marcarFiadoRecebido(v)}>Marcar recebido</button>}{permitirCancelar && v.status !== 'cancelada' && <button className="mini perigo" disabled={caixaFechado} onClick={() => cancelarVenda(v)}>Cancelar</button>}</div></td>
             </tr>
           ))}
         </tbody>
@@ -1768,7 +1799,10 @@ function Relatorio({ evento, vendas, resumo, produtos, caixas }) {
       ]} />
 
       <h3>Produtos vendidos</h3>
-      <Tabela linhas={resumo.porProduto.map((p) => [`${p.nome} (${moeda(p.precoUnit)} cada)`, `${p.qtd} ficha(s)`, moeda(p.valor)])} vazio="Nenhum produto vendido." />
+      <Tabela linhas={resumo.porProduto.filter((p) => !ePromo(p, produtos)).map((p) => [p.nome, `${p.qtd} ficha(s)`, moeda(p.valor)])} vazio="Nenhum produto vendido." />
+
+      <h3>Produtos vendidos na promoção</h3>
+      <Tabela linhas={resumo.porProduto.filter((p) => ePromo(p, produtos)).map((p) => [`${p.nome} (${moeda(p.precoUnit)} cada)`, `${p.qtd} ficha(s)`, moeda(p.valor)])} vazio="Nenhuma venda em promoção." />
 
       <h3>Estoque atual</h3>
       <Tabela linhas={produtos.map((p) => [p.nome, moeda(p.preco), `Estoque: ${p.estoque_atual}`, p.ativo ? 'Ativo' : 'Inativo'])} />
@@ -1783,7 +1817,7 @@ function Relatorio({ evento, vendas, resumo, produtos, caixas }) {
 function RelatorioPdf({ evento, vendas, resumo, produtos, caixas, movimentacoes, caixaFechado }) {
   const vendasFinalizadas = vendas.filter((v) => v.status !== 'cancelada');
   const vendasCanceladas = vendas.filter((v) => v.status === 'cancelada');
-  const formasRelatorio = ['Pix', 'Dinheiro', 'Débito', 'Crédito', 'Cartão'].filter((f) => Number(resumo.porForma[f] || 0) > 0 || ['Pix', 'Dinheiro', 'Débito', 'Crédito'].includes(f));
+  const formasRelatorio = ['Pix', 'Dinheiro', 'Débito', 'Crédito', 'Fiado', 'Cortesia'].filter((f) => Number(resumo.porForma[f] || 0) > 0 || ['Pix', 'Dinheiro', 'Débito', 'Crédito'].includes(f));
   const dataGeracao = hojeBR();
   const statusCaixa = caixaFechado ? `Fechado em ${evento?.fechado_em ? new Date(evento.fechado_em).toLocaleString('pt-BR') : '-'}` : 'Caixa aberto';
 
@@ -1835,11 +1869,23 @@ function RelatorioPdf({ evento, vendas, resumo, produtos, caixas, movimentacoes,
       <section className="pdf-bloco">
         <h2>Produtos vendidos</h2>
         <table>
-          <thead><tr><th>Produto</th><th>Preço unitário</th><th>Qtd.</th><th>Valor vendido</th></tr></thead>
+          <thead><tr><th>Produto</th><th>Preço</th><th>Qtd.</th><th>Valor vendido</th></tr></thead>
           <tbody>
-            {resumo.porProduto.length ? resumo.porProduto.map((p) => (
+            {resumo.porProduto.filter((p) => !ePromo(p, produtos)).length ? resumo.porProduto.filter((p) => !ePromo(p, produtos)).map((p) => (
               <tr key={`pdf-produto-${p.nome}-${p.precoUnit}`}><td>{p.nome}</td><td>{moeda(p.precoUnit)}</td><td>{p.qtd}</td><td>{moeda(p.valor)}</td></tr>
             )) : <tr><td colSpan="4">Nenhum produto vendido.</td></tr>}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="pdf-bloco">
+        <h2>Produtos vendidos na promoção</h2>
+        <table>
+          <thead><tr><th>Produto</th><th>Preço promo</th><th>Qtd.</th><th>Valor vendido</th></tr></thead>
+          <tbody>
+            {resumo.porProduto.filter((p) => ePromo(p, produtos)).length ? resumo.porProduto.filter((p) => ePromo(p, produtos)).map((p) => (
+              <tr key={`pdf-promo-${p.nome}-${p.precoUnit}`}><td>{p.nome}</td><td>{moeda(p.precoUnit)}</td><td>{p.qtd}</td><td>{moeda(p.valor)}</td></tr>
+            )) : <tr><td colSpan="4">Nenhuma venda em promoção.</td></tr>}
           </tbody>
         </table>
       </section>
@@ -2237,7 +2283,8 @@ nav button.ativo { color: var(--ag-blue); background: rgba(14,126,168,0.08); bor
 .qtd-actions { display: flex; align-items: center; gap: 8px; }
 .qtd-actions button { width: 30px; height: 30px; border: 0.5px solid var(--ag-border); background: #fff; border-radius: 9px; font-weight: 900; }
 .label { display: block; font-weight: 850; color: var(--ag-muted); margin: 12px 0 7px; font-size: 11px; }
-.pagamentos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.pagamentos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.aviso-pagamento { font-size: 11px; color: #7D7A72; background: rgba(255,200,0,.08); border: 0.5px solid rgba(230,150,20,.25); border-radius: 10px; padding: 8px 10px; margin-top: 8px; }
 .pagamentos button {
   border: 0.5px solid var(--ag-border);
   background: rgba(255,255,255,0.82);
