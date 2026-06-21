@@ -2530,7 +2530,13 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .app-shell.colapsado .nav-secao { height: 10px; border-bottom: 0.5px solid #F1EFE8; margin-bottom: 4px; overflow: hidden; }
 .app-shell.colapsado nav button { justify-content: center; padding: 10px 0; }
 .app-shell.colapsado .nav-icone { font-size: 17px; }
-.rodape-side { display: flex; align-items: center; gap: 9px; }
+.rodape-side { display: flex; flex-direction: row; align-items: center; gap: 9px; }
+.user-info { text-align: left; }
+.sidebar-scroll { scrollbar-width: thin; scrollbar-color: #D3D1C7 transparent; }
+.sidebar-scroll::-webkit-scrollbar { width: 5px; }
+.sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+.sidebar-scroll::-webkit-scrollbar-thumb { background: #D3D1C7; border-radius: 99px; }
+.sidebar-scroll::-webkit-scrollbar-thumb:hover { background: #B4B2A9; }
 .app-shell.colapsado .rodape-side { flex-direction: column; padding: .7rem 0; }
 .user-badge { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 10px; flex-shrink: 0; }
 .user-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
