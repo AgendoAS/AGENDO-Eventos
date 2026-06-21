@@ -17,9 +17,10 @@ function fiadoPorPessoa(vendas) {
     .filter((v) => v.status !== 'cancelada' && v.forma_pagamento === 'Fiado')
     .reduce((acc, v) => {
       const chave = v.pessoa_fiado || 'Sem nome';
-      if (!acc[chave]) acc[chave] = { nome: chave, qtdVendas: 0, total: 0 };
+      if (!acc[chave]) acc[chave] = { nome: chave, qtdVendas: 0, total: 0, vendas: [] };
       acc[chave].qtdVendas += 1;
       acc[chave].total += Number(v.total || 0);
+      acc[chave].vendas.push(v);
       return acc;
     }, {});
   return Object.values(grupos).sort((a, b) => b.total - a.total);
@@ -1467,6 +1468,27 @@ export default function App() {
                   vazio="Ninguém deve nada no momento. 🎉"
                 />
               </div>
+              {fiadoPorPessoa(vendas).map((p) => (
+                <div className="card" key={`fiado-detalhe-${p.nome}`}>
+                  <h2>{p.nome} — itens pra conferência</h2>
+                  <div className="tabela-scroll">
+                    <table>
+                      <thead><tr><th>Venda</th><th>Horário</th><th>Itens</th><th>Total</th><th>Status</th></tr></thead>
+                      <tbody>
+                        {p.vendas.map((v) => (
+                          <tr key={`fiado-venda-${v.id}`}>
+                            <td>#{numero(v.numero)}</td>
+                            <td>{new Date(v.criada_em).toLocaleString('pt-BR')}</td>
+                            <td>{(v.itens || []).map((i) => `${i.quantidade}× ${i.nome_produto} (${moeda(i.preco_unitario)})`).join(' | ')}</td>
+                            <td>{moeda(v.total)}</td>
+                            <td><button className="mini verde" onClick={() => marcarFiadoRecebido(v)}>Marcar recebido</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
             </section>
           )}
 
