@@ -482,24 +482,29 @@ export default function App() {
     const GS = '\x1D';
     const nomeCaixa = paraTextoTermico(vendaRef?.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa');
     const numeroVenda = numero(vendaRef?.numero);
+    const linha = '--------------------------------';
     let cmd = '';
     cmd += ESC + '@';                 // inicializa impressora
-    cmd += '\n\n';                    // respiro no topo
-    cmd += ESC + 'a' + '\x01';        // centraliza
+    cmd += ESC + 'a' + '\x01';        // centraliza tudo
+    cmd += '\n';
+    cmd += `${linha}\n`;              // marca de início da ficha
+    cmd += '\n';
     cmd += GS + '!' + '\x00';         // tamanho normal
-    cmd += 'AGENDO EVENTOS\n\n';
+    cmd += 'AGENDO EVENTOS\n';
+    cmd += '\n';
     cmd += GS + '!' + '\x11';         // dobro altura+largura
     cmd += ESC + 'E' + '\x01';        // negrito on
     cmd += `${paraTextoTermico(item.produto)}\n`.toUpperCase();
     cmd += ESC + 'E' + '\x00';        // negrito off
     cmd += GS + '!' + '\x00';         // tamanho normal
     cmd += '\n';
-    cmd += `${paraTextoTermico(moeda(item.valor))}\n\n`;
-    cmd += '--------------------------------\n\n';
+    cmd += `${paraTextoTermico(moeda(item.valor))}\n`;
+    cmd += '\n';
     cmd += `${paraTextoTermico(evento?.nome || 'Evento')}\n`;
     cmd += `${nomeCaixa} - Venda no ${numeroVenda}\n`;
-    cmd += '--------------------------------\n';
-    cmd += '\n\n\n\n\n\n';            // espaço extra antes do corte
+    cmd += '\n';
+    cmd += `${linha}\n`;              // marca de fim da ficha
+    cmd += '\n\n\n\n\n';              // espaço pra rasgar
     cmd += GS + 'V' + '\x00';         // corta papel
     return cmd;
   }
