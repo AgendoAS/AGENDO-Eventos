@@ -1962,7 +1962,7 @@ function Relatorio({ evento, vendas, resumo, produtos, caixas }) {
       <Tabela linhas={fiadoPorPessoa(vendas).map((p) => [p.nome, `${p.qtdVendas} venda(s)`, moeda(p.total)])} vazio="Ninguém deve nada no momento." />
 
       <h3>Estoque atual</h3>
-      <Tabela linhas={produtos.map((p) => [p.nome, moeda(p.preco), `Estoque: ${p.estoque_atual}`, p.ativo ? 'Ativo' : 'Inativo'])} />
+      <Tabela linhas={produtos.map((p) => [p.nome, moeda(p.preco), `Estoque: ${Math.max(0, p.estoque_atual)}`, p.ativo ? 'Ativo' : 'Inativo'])} />
 
       <h3>Total por caixa</h3>
       <Tabela linhas={totalPorCaixa(vendas, caixas).map((c) => [`${c.nome} (${c.operador})`, `${c.vendas} venda(s)`, `${c.fichas} ficha(s)`, moeda(c.total)])} vazio="Nenhuma venda registrada." />
@@ -2064,7 +2064,7 @@ function RelatorioPdf({ evento, vendas, resumo, produtos, caixas, movimentacoes,
         <table>
           <thead><tr><th>Produto</th><th>Preço</th><th>Estoque</th><th>Status</th></tr></thead>
           <tbody>
-            {produtos.map((p) => <tr key={`pdf-estoque-${p.id}`}><td>{p.nome}</td><td>{moeda(p.preco)}</td><td>{p.estoque_atual}</td><td>{p.ativo ? 'Ativo' : 'Inativo'}</td></tr>)}
+            {produtos.map((p) => <tr key={`pdf-estoque-${p.id}`}><td>{p.nome}</td><td>{moeda(p.preco)}</td><td>{Math.max(0, p.estoque_atual)}</td><td>{p.ativo ? 'Ativo' : 'Inativo'}</td></tr>)}
           </tbody>
         </table>
       </section>
