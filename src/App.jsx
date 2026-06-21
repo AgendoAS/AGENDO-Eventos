@@ -948,7 +948,16 @@ export default function App() {
           </div>
         )}
 
-        {(!isMobile || menuAberto) && sidebarMarkup}
+        {!isMobile && sidebarMarkup}
+
+        {isMobile && menuAberto && (
+          <>
+            <div className="drawer-overlay" onClick={() => setMenuAberto(false)} />
+            <div className="drawer-mobile">
+              <div className="drawer-mobile-inner">{sidebarMarkup}</div>
+            </div>
+          </>
+        )}
 
         <main className="conteudo">
           {isMobile && (
@@ -2754,36 +2763,20 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .busca-item:hover { background: rgba(14,126,168,0.08); }
 .busca-item i { font-size: 15px; color: #888780; }
 
-@keyframes menuSlideDown {
-  from { opacity: 0; transform: translateY(-12px); }
-  to { opacity: 1; transform: translateY(0); }
+.drawer-mobile {
+  border-radius: 0 18px 18px 0;
+  box-shadow: 0 16px 40px rgba(6,52,79,.18);
 }
+.drawer-mobile .brand { padding: 16px 18px; }
+.drawer-mobile .evento-card { margin: 12px 16px; padding: 14px 16px; }
+.drawer-mobile nav { padding: 6px 0 12px; }
+.drawer-mobile .nav-secao { margin-bottom: 2px; }
+.drawer-mobile .nav-secao-titulo { padding: 13px 1.2rem 4px; }
+.drawer-mobile nav button { padding: 11px 1.2rem; }
+.drawer-mobile .rodape-side { padding: 13px 16px; }
 
 @media (max-width: 1000px) {
   .app-shell { grid-template-columns: 1fr; }
-  .app-shell .sidebar {
-    width: 100%;
-    height: auto;
-    max-height: 75vh;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    position: relative;
-    top: auto;
-    backdrop-filter: none;
-    background: #FCFBF8;
-    border: none;
-    border-radius: 0 0 22px 22px;
-    box-shadow: 0 16px 30px rgba(6,52,79,.10);
-    margin-bottom: 14px;
-    animation: menuSlideDown .22s cubic-bezier(.2,.8,.3,1);
-  }
-  .app-shell .sidebar .brand { padding: 16px 18px; }
-  .app-shell .sidebar .evento-card { margin: 12px 16px; padding: 14px 16px; }
-  .app-shell .sidebar nav { padding: 6px 0 12px; }
-  .app-shell .sidebar .nav-secao { margin-bottom: 2px; }
-  .app-shell .sidebar .nav-secao-titulo { padding: 13px 1.2rem 4px; }
-  .app-shell .sidebar nav button { padding: 11px 1.2rem; }
-  .app-shell .sidebar .rodape-side { padding: 13px 16px; }
   .topo-mobile {
     margin: 0 0 1rem;
     border-radius: 14px;
