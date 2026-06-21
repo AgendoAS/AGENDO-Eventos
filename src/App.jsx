@@ -65,6 +65,10 @@ export default function App() {
   const [vendaImpressaoDireta, setVendaImpressaoDireta] = useState(null);
 
   const [colapsado, setColapsado] = useState(() => localStorage.getItem('agendo_eventos_menu_colapsado') === '1');
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1000);
+  const [menuAberto, setMenuAberto] = useState(false);
+  const [buscaAberta, setBuscaAberta] = useState(false);
+  const [termoBusca, setTermoBusca] = useState('');
   const [secFechadas, setSecFechadas] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem('agendo_eventos_sec_fechadas') || '["Configurações"]')); }
     catch { return new Set(['Configurações']); }
@@ -337,6 +341,25 @@ export default function App() {
   }
   const secVisivel = (nome) => colapsado || !secFechadas.has(nome);
 
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth < 1000);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setBuscaAberta((v) => !v);
+        setTermoBusca('');
+      }
+      if (e.key === 'Escape') setBuscaAberta(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   function aviso(texto) {
     setMensagem(texto);
     setTimeout(() => setMensagem(''), 3500);
@@ -450,15 +473,16 @@ export default function App() {
     const estoque = Number(novoProduto.estoque || 0);
     if (!nome || !preco) return aviso('Informe nome e preço.');
 
-    const { error } = await supabase.from('produtos').insert({
+    const { data, error } = await supabase.from('produtos').insert({
       evento_id: EVENTO_ID,
       nome,
       preco,
       estoque_inicial: estoque,
       estoque_atual: estoque,
       ativo: true,
-    });
+    }).select();
     if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Produto não foi salvo (possível bloqueio de permissão). Tente novamente.');
     setNovoProduto({ nome: '', preco: '', estoque: '' });
     aviso(`Produto "${nome}" adicionado.`);
     carregarTudo();
@@ -475,8 +499,9 @@ export default function App() {
 
   async function alternarProduto(produto) {
     if (caixaFechado) return aviso('Evento fechado. Não é possível alterar produtos.');
-    const { error } = await supabase.from('produtos').update({ ativo: !produto.ativo }).eq('id', produto.id);
+    const { data, error } = await supabase.from('produtos').update({ ativo: !produto.ativo }).eq('id', produto.id).select();
     if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('A alteração não foi salva (possível bloqueio de permissão).');
     aviso(produto.ativo ? 'Produto desativado.' : 'Produto ativado.');
     carregarTudo();
   }
@@ -487,7 +512,7 @@ export default function App() {
     const valor = Number(String(movimento.valor).replace(',', '.'));
     if (!valor || valor <= 0) return aviso('Informe o valor.');
 
-    const { error } = await supabase.rpc('registrar_movimentacao_evento', {
+    const { data, error } = await supabase.rpc('registrar_movimentacao_evento', {
       p_evento_id: EVENTO_ID,
       p_caixa_id: caixaAtual?.id || null,
       p_tipo: movimento.tipo,
@@ -497,6 +522,7 @@ export default function App() {
     });
 
     if (error) return setErro(error.message);
+    if (data === null || data === undefined) return setErro('Movimentação não confirmada pelo servidor. Verifique antes de continuar.');
     setMovimento({ tipo: 'Reforço', valor: '', motivo: '' });
     aviso('Movimentação registrada.');
     carregarTudo();
@@ -505,31 +531,35 @@ export default function App() {
   async function removerMovimentacao(id) {
     if (caixaFechado) return aviso('Evento fechado. Não é possível remover movimentação.');
     if (!confirm('Remover esta movimentação?')) return;
-    const { error } = await supabase.from('movimentacoes_caixa').delete().eq('id', id);
+    const { data, error } = await supabase.from('movimentacoes_caixa').delete().eq('id', id).select();
     if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Não foi possível remover (possível bloqueio de permissão).');
     carregarTudo();
   }
 
   async function fecharEvento() {
     if (!confirm('Fechar o caixa geral do evento? Isso trava alterações.')) return;
 
-    const { error } = await supabase.rpc('fechar_evento_geral', {
+    const { data, error } = await supabase.rpc('fechar_evento_geral', {
       p_evento_id: EVENTO_ID,
       p_fechado_por: caixaPrincipal?.operador || 'Caixa Principal',
     });
 
     if (error) return setErro(error.message);
+    if (data === null || data === undefined) return setErro('Fechamento não confirmado pelo servidor. Verifique antes de continuar.');
     aviso('Evento fechado.');
     carregarTudo();
   }
 
   async function reabrirEvento() {
     if (!confirm('Reabrir o evento? Use apenas para correção.')) return;
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('eventos')
       .update({ status: 'aberto', fechado_em: null })
-      .eq('id', EVENTO_ID);
+      .eq('id', EVENTO_ID)
+      .select();
     if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Reabertura não foi salva (possível bloqueio de permissão).');
     aviso('Evento reaberto.');
     carregarTudo();
   }
@@ -672,8 +702,9 @@ export default function App() {
       local_evento: eventoForm.local_evento.trim() || null,
       data_evento: eventoForm.data_evento || null,
     };
-    const { error } = await supabase.from('eventos').update(payload).eq('id', EVENTO_ID);
+    const { data, error } = await supabase.from('eventos').update(payload).eq('id', EVENTO_ID).select();
     if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Dados não foram salvos (possível bloqueio de permissão).');
     aviso('Dados do evento salvos.');
     carregarTudo();
   }
@@ -690,14 +721,15 @@ export default function App() {
     e.preventDefault();
     const nome = novoCaixa.nome.trim();
     if (!nome) return aviso('Informe o nome do caixa.');
-    const { error } = await supabase.from('caixas').insert({
+    const { data, error } = await supabase.from('caixas').insert({
       evento_id: EVENTO_ID,
       nome,
       operador: novoCaixa.operador.trim() || null,
       tipo: novoCaixa.tipo || 'secundario',
       ativo: true,
-    });
+    }).select();
     if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Caixa não foi salvo (possível bloqueio de permissão).');
     setNovoCaixa({ nome: '', operador: '', tipo: 'secundario' });
     aviso('Caixa adicionado.');
     carregarTudo();
@@ -735,6 +767,21 @@ export default function App() {
   ];
   const menuSecoes = modoAcesso === 'principal' ? menuPrincipalSecoes : menuCaixaSecoes;
   const menu = menuSecoes.flatMap((sec) => sec.itens);
+  const itensBusca = menu.map(([id, label]) => ({ id, label, icon: MENU_ICONS[id] || 'circle' }));
+  const resultadosBusca = termoBusca
+    ? itensBusca.filter((i) => i.label.toLowerCase().includes(termoBusca.toLowerCase()))
+    : itensBusca.slice(0, 8);
+
+  function irPara(id) {
+    setBuscaAberta(false);
+    setTermoBusca('');
+    setPagina(id);
+    setMenuAberto(false);
+  }
+
+  function fecharMenu() {
+    if (isMobile) setMenuAberto(false);
+  }
 
   useEffect(() => {
     if (!menu.some(([id]) => id === pagina)) {
@@ -785,90 +832,144 @@ export default function App() {
     );
   }
 
+  const sidebarMarkup = (
+    <aside className="sidebar no-print">
+      <div className="brand">
+        {!colapsado && (
+          <>
+            <img className="brand-logo" src={AGENDO_LOGO} alt="AGENDO" />
+            <div>
+              <strong>AGENDO Eventos</strong>
+              <span>Gestão integrada para eventos</span>
+            </div>
+          </>
+        )}
+        {colapsado && !isMobile && <img className="brand-logo" src={AGENDO_LOGO} alt="AGENDO" />}
+        {!isMobile && (
+          <button className="colapsar-btn" onClick={toggleColapsado} title={colapsado ? 'Expandir menu' : 'Recolher menu'}>
+            <i className={`ti ti-layout-sidebar-left-${colapsado ? 'expand' : 'collapse'}`} />
+          </button>
+        )}
+        {isMobile && (
+          <button className="colapsar-btn" onClick={() => setMenuAberto(false)} title="Fechar menu">
+            <i className="ti ti-x" />
+          </button>
+        )}
+      </div>
+
+      {!colapsado && (
+        <div className="evento-card evento-oscard">
+          <img src={CAPETTE_LOGO} alt={evento?.instituicao || 'Instituição'} />
+          <small>EVENTO</small>
+          <strong>{evento?.instituicao || 'CAPETTE'}</strong>
+          <span>{evento?.nome || 'Festa Junina'}</span>
+        </div>
+      )}
+      {!colapsado && (
+        <div className="evento-card sessao-card">
+          <small>ACESSO</small>
+          <strong>{modoAcesso === 'principal' ? 'Caixa Principal' : caixaAtual?.nome || 'Caixa'}</strong>
+          <span>{modoAcesso === 'principal' ? 'Administração e fechamento' : caixaAtual?.operador || 'Operador'}</span>
+          {modoAcesso === 'caixa' && (
+            <select value={caixaAtual?.id || ''} onChange={(e) => setCaixaSelecionadoId(e.target.value)}>
+              {caixasAtivos.filter((c) => c.tipo !== 'principal').map((c) => <option key={c.id} value={c.id}>{c.nome} • {c.operador || 'Operador'}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+
+      <nav className="sidebar-scroll">
+        {menuSecoes.map((secao) => (
+          <div className="nav-secao" key={secao.titulo}>
+            <div
+              className="nav-secao-titulo"
+              onClick={colapsado ? undefined : () => toggleSec(secao.titulo)}
+              style={{ cursor: colapsado ? 'default' : 'pointer' }}
+            >
+              {!colapsado && secao.titulo}
+              {!colapsado && (
+                <i className={`ti ti-chevron-${secVisivel(secao.titulo) ? 'down' : 'right'}`} />
+              )}
+            </div>
+            {secVisivel(secao.titulo) && secao.itens.map(([id, label]) => (
+              <button key={id} className={pagina === id ? 'ativo' : ''} title={colapsado ? label : undefined} onClick={() => { setPagina(id); fecharMenu(); }}>
+                <i className={`ti ti-${MENU_ICONS[id] || 'circle'} nav-icone`} />
+                {!colapsado && <span>{label}</span>}
+              </button>
+            ))}
+          </div>
+        ))}
+      </nav>
+
+      <div className="rodape-side">
+        <div className="user-badge">{modoAcesso === 'principal' ? 'CP' : (caixaAtual?.nome || 'CX').slice(-2)}</div>
+        {!colapsado && (
+          <div className="user-info">
+            <span>{modoAcesso === 'principal' ? 'Principal' : caixaAtual?.operador || 'Operador'}</span>
+            <strong>{evento?.status === 'fechado' ? 'Fechado' : 'Aberto'}</strong>
+          </div>
+        )}
+        {!colapsado && (
+          <div className="side-actions">
+            <button className="sair-acesso" onClick={sairAcesso} title="Trocar acesso"><i className="ti ti-replace" /></button>
+            <button className="sair-acesso danger" onClick={sairSistema} title="Sair"><i className="ti ti-logout" /></button>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+
   return (
     <>
       <style>{css}</style>
       <style>{cssImpressao(papelAtual.largura)}</style>
       <div className={`app-shell ${colapsado ? 'colapsado' : ''}`}>
-        <aside className="sidebar no-print">
-          <div className="brand">
-            {!colapsado && (
-              <>
-                <img className="brand-logo" src={AGENDO_LOGO} alt="AGENDO" />
-                <div>
-                  <strong>AGENDO Eventos</strong>
-                  <span>Gestão integrada para eventos</span>
-                </div>
-              </>
-            )}
-            {colapsado && <img className="brand-logo" src={AGENDO_LOGO} alt="AGENDO" />}
-            <button className="colapsar-btn" onClick={toggleColapsado} title={colapsado ? 'Expandir menu' : 'Recolher menu'}>
-              <i className={`ti ti-layout-sidebar-left-${colapsado ? 'expand' : 'collapse'}`} />
-            </button>
-          </div>
-
-          {!colapsado && (
-            <div className="evento-card evento-oscard">
-              <img src={CAPETTE_LOGO} alt={evento?.instituicao || 'Instituição'} />
-              <small>EVENTO</small>
-              <strong>{evento?.instituicao || 'CAPETTE'}</strong>
-              <span>{evento?.nome || 'Festa Junina'}</span>
-            </div>
-          )}
-          {!colapsado && (
-            <div className="evento-card sessao-card">
-              <small>ACESSO</small>
-              <strong>{modoAcesso === 'principal' ? 'Caixa Principal' : caixaAtual?.nome || 'Caixa'}</strong>
-              <span>{modoAcesso === 'principal' ? 'Administração e fechamento' : caixaAtual?.operador || 'Operador'}</span>
-              {modoAcesso === 'caixa' && (
-                <select value={caixaAtual?.id || ''} onChange={(e) => setCaixaSelecionadoId(e.target.value)}>
-                  {caixasAtivos.filter((c) => c.tipo !== 'principal').map((c) => <option key={c.id} value={c.id}>{c.nome} • {c.operador || 'Operador'}</option>)}
-                </select>
-              )}
-            </div>
-          )}
-
-          <nav className="sidebar-scroll">
-            {menuSecoes.map((secao) => (
-              <div className="nav-secao" key={secao.titulo}>
-                <div
-                  className="nav-secao-titulo"
-                  onClick={colapsado ? undefined : () => toggleSec(secao.titulo)}
-                  style={{ cursor: colapsado ? 'default' : 'pointer' }}
-                >
-                  {!colapsado && secao.titulo}
-                  {!colapsado && (
-                    <i className={`ti ti-chevron-${secVisivel(secao.titulo) ? 'down' : 'right'}`} />
-                  )}
-                </div>
-                {secVisivel(secao.titulo) && secao.itens.map(([id, label]) => (
-                  <button key={id} className={pagina === id ? 'ativo' : ''} title={colapsado ? label : undefined} onClick={() => setPagina(id)}>
-                    <i className={`ti ti-${MENU_ICONS[id] || 'circle'} nav-icone`} />
-                    {!colapsado && <span>{label}</span>}
-                  </button>
+        {buscaAberta && (
+          <div className="busca-overlay no-print" onClick={(e) => { if (e.target === e.currentTarget) setBuscaAberta(false); }}>
+            <div className="busca-modal">
+              <div className="busca-input-linha">
+                <i className="ti ti-search" />
+                <input
+                  autoFocus
+                  value={termoBusca}
+                  onChange={(e) => setTermoBusca(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && resultadosBusca[0]) irPara(resultadosBusca[0].id); }}
+                  placeholder="Ir para... (digite o nome da tela)"
+                />
+                <span className="busca-esc">Esc</span>
+              </div>
+              <div className="busca-resultados">
+                {resultadosBusca.length === 0 ? (
+                  <div className="busca-vazio">Nenhuma tela encontrada.</div>
+                ) : resultadosBusca.map((item) => (
+                  <div key={item.id} className="busca-item" onClick={() => irPara(item.id)}>
+                    <i className={`ti ti-${item.icon}`} />
+                    {item.label}
+                  </div>
                 ))}
               </div>
-            ))}
-          </nav>
-
-          <div className="rodape-side">
-            <div className="user-badge">{modoAcesso === 'principal' ? 'CP' : (caixaAtual?.nome || 'CX').slice(-2)}</div>
-            {!colapsado && (
-              <div className="user-info">
-                <span>{modoAcesso === 'principal' ? 'Principal' : caixaAtual?.operador || 'Operador'}</span>
-                <strong>{evento?.status === 'fechado' ? 'Fechado' : 'Aberto'}</strong>
-              </div>
-            )}
-            {!colapsado && (
-              <div className="side-actions">
-                <button className="sair-acesso" onClick={sairAcesso} title="Trocar acesso"><i className="ti ti-replace" /></button>
-                <button className="sair-acesso danger" onClick={sairSistema} title="Sair"><i className="ti ti-logout" /></button>
-              </div>
-            )}
+            </div>
           </div>
-        </aside>
+        )}
+
+        {!isMobile && sidebarMarkup}
+
+        {isMobile && menuAberto && (
+          <>
+            <div className="drawer-overlay" onClick={() => setMenuAberto(false)} />
+            <div className="drawer-mobile">{sidebarMarkup}</div>
+          </>
+        )}
 
         <main className="conteudo">
+          {isMobile && (
+            <div className="topo-mobile no-print">
+              <button onClick={() => setMenuAberto(true)}><i className="ti ti-menu-2" /></button>
+              <img src={AGENDO_LOGO} alt="AGENDO" />
+              <div style={{ flex: 1 }} />
+              <button onClick={() => setBuscaAberta(true)}><i className="ti ti-search" /></button>
+            </div>
+          )}
           <div className="topo no-print">
             <div>
               <span className="eyebrow">AGENDO Eventos</span>
@@ -891,6 +992,40 @@ export default function App() {
             <span>Produtos ativos: <b>{produtosAtivos}</b></span>
             <span>Estoque: <b>{estoqueTotal}</b></span>
           </div>
+
+          {pagina === 'painel' && (
+            <section className="acoes-rapidas no-print">
+              <button className="acao-grande" onClick={() => setPagina('vender')}>
+                <i className="ti ti-ticket" />
+                <div>
+                  <strong>Vender fichas</strong>
+                  <span>Abrir tela de venda rápida</span>
+                </div>
+              </button>
+              <div className="acoes-medias">
+                <button className="acao-media" onClick={() => setPagina('relatorios')}>
+                  <i className="ti ti-report-analytics" />
+                  <span>Relatórios</span>
+                </button>
+                {modoAcesso === 'principal' && (
+                  <button className="acao-media" onClick={() => setPagina('fechamento')}>
+                    <i className="ti ti-checkup-list" />
+                    <span>Fechamento</span>
+                  </button>
+                )}
+              </div>
+              {modoAcesso === 'principal' && (
+                <div className="acoes-chips">
+                  <button className="chip" onClick={() => setPagina('produtos')}><i className="ti ti-packages" />Produtos</button>
+                  <button className="chip" onClick={() => setPagina('movimentacoes')}><i className="ti ti-arrows-exchange" />Sangria/reforço</button>
+                  <button className="chip" onClick={() => setPagina('caixas')}><i className="ti ti-users-group" />Caixas</button>
+                  <button className="chip" onClick={() => setPagina('dados')}><i className="ti ti-building-community" />Dados do evento</button>
+                  <button className="chip" onClick={() => setPagina('impressora')}><i className="ti ti-printer" />Impressora</button>
+                  <button className="chip" onClick={() => setPagina('backup')}><i className="ti ti-database-export" />Backup</button>
+                </div>
+              )}
+            </section>
+          )}
 
           {pagina === 'painel' && (
             <section className="grid painel-grid">
@@ -2554,6 +2689,73 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 
 @media (max-width: 1000px) {
   .app-shell.colapsado { grid-template-columns: 1fr; }
+}
+
+/* ===== Hierarquia de ações rápidas (padrão 1 grande + 2 médias + chips) ===== */
+.acoes-rapidas { display: grid; gap: 10px; margin-bottom: 14px; }
+.acao-grande {
+  display: flex; align-items: center; gap: 14px;
+  border: none; border-radius: 18px; padding: 18px 20px;
+  background: linear-gradient(135deg, #0E7EA8 0%, #096484 100%);
+  color: #fff; text-align: left;
+  box-shadow: 0 14px 30px rgba(14,126,168,.25);
+}
+.acao-grande i { font-size: 26px; flex-shrink: 0; }
+.acao-grande strong { display: block; font-size: 16px; }
+.acao-grande span { display: block; font-size: 12px; opacity: .85; margin-top: 2px; }
+.acoes-medias { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.acao-media {
+  display: flex; align-items: center; gap: 9px;
+  border: 0.5px solid var(--ag-border); border-radius: 14px; padding: 13px 14px;
+  background: rgba(255,255,255,.82); color: #06344F; font-weight: 700; font-size: 12.5px;
+}
+.acao-media i { font-size: 17px; color: #0E7EA8; }
+.acoes-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0.5px solid var(--ag-border); border-radius: 999px; padding: 6px 12px;
+  background: rgba(255,255,255,.7); color: #5F5E5A; font-size: 11px; font-weight: 600;
+}
+.chip i { font-size: 13px; color: #96C11F; }
+@media (max-width: 1000px) { .acoes-medias { grid-template-columns: 1fr; } }
+
+/* ===== Drawer mobile + busca Ctrl+K (padrão Layout.jsx do CAPETTE) ===== */
+@keyframes drawerIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; animation: fadeIn .18s ease; }
+.drawer-mobile {
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; width: 240px;
+  overflow-y: auto; background: rgba(255,255,255,0.98); backdrop-filter: blur(12px);
+  animation: drawerIn .22s cubic-bezier(.2,.8,.3,1);
+}
+.drawer-mobile .sidebar { width: 240px; height: 100%; }
+.topo-mobile {
+  display: flex; align-items: center; gap: 10px; padding: .6rem 1rem;
+  background: rgba(255,255,255,0.92); border-bottom: 0.5px solid #E8E6DE; margin: -1.35rem -1.65rem 1rem;
+}
+.topo-mobile img { height: 26px; width: auto; object-fit: contain; }
+.topo-mobile button { border: none; background: none; font-size: 19px; color: #888780; padding: 4px; display: flex; }
+.busca-overlay {
+  position: fixed; inset: 0; background: rgba(26,31,28,0.4); z-index: 9999;
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; backdrop-filter: blur(2px);
+}
+.busca-modal {
+  background: rgba(255,255,255,0.98); border: 0.5px solid #E8E6DE; border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18); width: 100%; max-width: 480px; overflow: hidden; margin: 0 1rem;
+}
+.busca-input-linha { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 0.5px solid #E8E6DE; }
+.busca-input-linha i { font-size: 16px; color: #888780; }
+.busca-input-linha input { flex: 1; border: none; outline: none; font-size: 14px; background: transparent; color: #1A1F1C; }
+.busca-esc { font-size: 10px; color: #C8C6BC; border: 0.5px solid #E8E6DE; border-radius: 5px; padding: 2px 6px; }
+.busca-resultados { max-height: 320px; overflow-y: auto; padding: 6px 0; }
+.busca-vazio { padding: 1.5rem; text-align: center; font-size: 12px; color: #888780; }
+.busca-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; color: #2C2C2A; cursor: pointer; }
+.busca-item:hover { background: rgba(14,126,168,0.08); }
+.busca-item i { font-size: 15px; color: #888780; }
+
+@media (max-width: 1000px) {
+  .app-shell { grid-template-columns: 1fr; }
+  .app-shell .sidebar { display: none; }
 }
 
 `;
