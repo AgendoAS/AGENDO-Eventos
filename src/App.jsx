@@ -21,7 +21,19 @@ const AGENDO_LOGO = '/agendo-logo.png';
 const AGENDO_TEXTO = '/agendo-texto.png';
 const CAPETTE_LOGO = '/logo.png';
 const MENU_ICONS = {
-  painel: '▦', vender: '+', produtos: '□', vendas: '≡', fechamento: '✓', movimentacoes: '↕', relatorios: '▤', dados: '◎', impressora: '⎙', caixas: '◉', backup: '⇩', config: '⚙', 'minhas-vendas': '≡'
+  painel: 'layout-dashboard',
+  vender: 'ticket',
+  produtos: 'packages',
+  vendas: 'list-details',
+  fechamento: 'checkup-list',
+  movimentacoes: 'arrows-exchange',
+  relatorios: 'report-analytics',
+  dados: 'building-community',
+  impressora: 'printer',
+  caixas: 'users-group',
+  backup: 'database-export',
+  config: 'settings',
+  'minhas-vendas': 'receipt-2',
 };
 
 export default function App() {
@@ -34,6 +46,14 @@ export default function App() {
   const [carregando, setCarregando] = useState(true);
   const [mensagem, setMensagem] = useState('');
   const [erro, setErro] = useState('');
+
+  const [usuario, setUsuario] = useState(null);
+  const [authCarregando, setAuthCarregando] = useState(true);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginSenha, setLoginSenha] = useState('');
+  const [loginErro, setLoginErro] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [recuperacaoMsg, setRecuperacaoMsg] = useState('');
 
   const [novoProduto, setNovoProduto] = useState({ nome: '', preco: '', estoque: '' });
   const [movimento, setMovimento] = useState({ tipo: 'Reforço', valor: '', motivo: '' });
@@ -138,6 +158,35 @@ export default function App() {
   }
 
   useEffect(() => {
+    let ativo = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!ativo) return;
+      setUsuario(data.session?.user || null);
+      setAuthCarregando(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUsuario(session?.user || null);
+      if (!session?.user) {
+        setAcessoConfirmado(false);
+        localStorage.removeItem('agendo_eventos_acesso_confirmado');
+      }
+    });
+
+    return () => {
+      ativo = false;
+      listener?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!usuario) {
+      setCarregando(false);
+      return;
+    }
+
+    setCarregando(true);
     carregarTudo();
 
     const canal = supabase
@@ -149,7 +198,7 @@ export default function App() {
       .subscribe();
 
     return () => supabase.removeChannel(canal);
-  }, []);
+  }, [usuario?.id]);
 
   useEffect(() => {
     localStorage.setItem('agendo_eventos_modo', modoAcesso);
@@ -522,6 +571,48 @@ export default function App() {
   }
 
 
+  async function fazerLogin(e) {
+    e.preventDefault();
+    setLoginErro('');
+    setRecuperacaoMsg('');
+    setLoginLoading(true);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail.trim(),
+      password: loginSenha,
+    });
+
+    if (error) {
+      setLoginErro('E-mail ou senha incorretos.');
+    }
+
+    setLoginLoading(false);
+  }
+
+  async function recuperarSenha() {
+    setLoginErro('');
+    setRecuperacaoMsg('');
+    if (!loginEmail.trim()) {
+      setLoginErro('Informe o e-mail no campo acima para recuperar a senha.');
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(loginEmail.trim(), {
+      redirectTo: window.location.origin,
+    });
+
+    if (error) setLoginErro('Não foi possível enviar a recuperação de senha.');
+    else setRecuperacaoMsg('E-mail de recuperação enviado. Verifique a caixa de entrada.');
+  }
+
+  async function sairSistema() {
+    setAcessoConfirmado(false);
+    setModoAcesso('principal');
+    setCaixaSelecionadoId('');
+    limparVendaPrincipal();
+    await supabase.auth.signOut();
+  }
+
   function entrarComoPrincipal() {
     setModoAcesso('principal');
     setCaixaSelecionadoId('');
@@ -627,8 +718,31 @@ export default function App() {
     }
   }, [modoAcesso, pagina]);
 
+  if (authCarregando) {
+    return <><style>{css}</style><div className="tela-carregando">Carregando AGENDO Eventos...</div></>;
+  }
+
+  if (!usuario) {
+    return (
+      <>
+        <style>{css}</style>
+        <TelaLogin
+          email={loginEmail}
+          senha={loginSenha}
+          setEmail={setLoginEmail}
+          setSenha={setLoginSenha}
+          erro={loginErro}
+          loading={loginLoading}
+          recuperarSenha={recuperarSenha}
+          recuperacaoMsg={recuperacaoMsg}
+          onSubmit={fazerLogin}
+        />
+      </>
+    );
+  }
+
   if (carregando) {
-    return <div className="tela-carregando">Carregando AGENDO Eventos...</div>;
+    return <><style>{css}</style><div className="tela-carregando">Carregando AGENDO Eventos...</div></>;
   }
 
   if (!acessoConfirmado) {
@@ -640,6 +754,8 @@ export default function App() {
           caixas={caixasAtivos.filter((c) => c.tipo !== 'principal')}
           entrarComoPrincipal={entrarComoPrincipal}
           entrarComoCaixa={entrarComoCaixa}
+          usuario={usuario}
+          sairSistema={sairSistema}
         />
       </>
     );
@@ -682,7 +798,7 @@ export default function App() {
                 <div className="nav-secao-titulo">{secao.titulo}</div>
                 {secao.itens.map(([id, label]) => (
                   <button key={id} className={pagina === id ? 'ativo' : ''} onClick={() => setPagina(id)}>
-                    <span className="nav-icone">{MENU_ICONS[id] || '•'}</span>
+                    <i className={`ti ti-${MENU_ICONS[id] || 'circle'} nav-icone`} />
                     <span>{label}</span>
                   </button>
                 ))}
@@ -696,7 +812,10 @@ export default function App() {
               <span>{modoAcesso === 'principal' ? 'Principal' : caixaAtual?.operador || 'Operador'}</span>
               <strong>{evento?.status === 'fechado' ? 'Fechado' : 'Aberto'}</strong>
             </div>
-            <button className="sair-acesso" onClick={sairAcesso}>Sair</button>
+            <div className="side-actions">
+              <button className="sair-acesso" onClick={sairAcesso}>Trocar acesso</button>
+              <button className="sair-acesso danger" onClick={sairSistema}>Sair</button>
+            </div>
           </div>
         </aside>
 
@@ -1077,55 +1196,201 @@ export default function App() {
 }
 
 
-function TelaAcesso({ evento, caixas, entrarComoPrincipal, entrarComoCaixa }) {
-  const caixasOperacao = caixas.length ? caixas : [];
+function TelaLogin({ email, senha, setEmail, setSenha, erro, loading, onSubmit, recuperarSenha, recuperacaoMsg }) {
   return (
-    <div className="acesso-page">
-      <div className="acesso-watermark">AGENDO</div>
-      <section className="acesso-panel">
-        <div className="acesso-logo-row">
-          <img className="acesso-agendo-logo" src={AGENDO_LOGO} alt="AGENDO" />
-          <div>
-            <div className="acesso-marca">AGENDO Integra</div>
-            <h1>Eventos</h1>
-            <p>{evento?.nome || 'Sistema de caixa para eventos'}</p>
-          </div>
-        </div>
+    <div className="login-agendo-page">
+      <div className="login-watermark-logo">
+        <img src={AGENDO_LOGO} alt="" />
+      </div>
 
-        <div className="acesso-evento">
-          <span>Instituição</span>
-          <strong>{evento?.instituicao || 'CAPETTE'}</strong>
-          <small>{evento?.local_evento || 'Evento integrado ao AGENDO'}</small>
-        </div>
+      <main className="login-conteudo">
+        <header className="login-institucional">
+          <div>AGENDO Integra</div>
+          <small>Gestão integrada para OSCs, eventos sociais e prestações de contas</small>
+        </header>
 
-        <div className="acesso-opcoes">
-          <button className="acesso-opcao principal" onClick={entrarComoPrincipal}>
-            <span>Caixa Principal</span>
-            <strong>Administração completa</strong>
-            <small>Vendas, produtos, fechamento, relatórios e configurações.</small>
-          </button>
-
-          <div className="acesso-caixas">
-            <div className="acesso-caixas-titulo">
-              <span>Caixas operadores</span>
-              <small>Escolha o caixa de atendimento</small>
+        <section className="login-grid">
+          <article className="login-card login-card-interno">
+            <div className="login-card-logo">
+              <img src={CAPETTE_LOGO} alt="CAPETTE" />
             </div>
-            {caixasOperacao.length ? caixasOperacao.map((c) => (
-              <button className="acesso-opcao caixa" key={c.id} onClick={() => entrarComoCaixa(c.id)}>
-                <span>{c.nome}</span>
-                <strong>{c.operador || 'Operador'}</strong>
-                <small>Venda rápida e reimpressão.</small>
+
+            <div className="login-card-titulo">Área Interna</div>
+            <div className="login-card-subtitulo">AGENDO Eventos · Acesso restrito</div>
+
+            <div className="login-divisor" />
+
+            <form className="login-form" onSubmit={onSubmit}>
+              <label>
+                <span>E-mail</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  autoComplete="email"
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Senha</span>
+                <input
+                  type="password"
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+
+              {erro && <div className="login-alert erro">{erro}</div>}
+              {recuperacaoMsg && <div className="login-alert ok">{recuperacaoMsg}</div>}
+
+              <button className="login-btn-primary" type="submit" disabled={loading}>
+                {loading ? 'Entrando...' : 'Entrar'}
               </button>
-            )) : (
-              <button className="acesso-opcao caixa" onClick={() => entrarComoCaixa(null)}>
-                <span>Caixa operador</span>
-                <strong>Iniciar atendimento</strong>
-                <small>Venda rápida e reimpressão.</small>
+
+              <button className="login-link" type="button" onClick={recuperarSenha}>
+                Esqueci minha senha
               </button>
-            )}
-          </div>
+            </form>
+
+            <div className="login-restrito">
+              <i className="ti ti-lock" />
+              Acesso restrito à equipe autorizada.
+            </div>
+          </article>
+
+          <article className="login-card login-card-publico">
+            <div>
+              <div className="login-card-titulo">Operação de Eventos</div>
+              <div className="login-card-subtitulo">Caixa, fichas, impressão e fechamento</div>
+
+              <div className="login-divisor soft" />
+
+              <p className="login-texto">
+                Entre com seu usuário autorizado. Depois do login, o sistema libera o acesso ao Caixa Principal ou aos caixas operadores conforme a operação do evento.
+              </p>
+
+              <div className="login-beneficios">
+                <div><i className="ti ti-ticket" /> Venda de fichas com impressão automática</div>
+                <div><i className="ti ti-printer" /> Configuração de impressora 58mm/80mm</div>
+                <div><i className="ti ti-report-analytics" /> Relatório e fechamento do evento</div>
+              </div>
+
+              <div className="login-nota">
+                O link online só permite operação após login. Não compartilhe usuário e senha fora da equipe autorizada.
+              </div>
+            </div>
+
+            <div className="login-publico-rodape">
+              <i className="ti ti-shield-lock" />
+              Ambiente protegido por autenticação
+            </div>
+          </article>
+        </section>
+
+        <footer className="login-footer">
+          <img src={AGENDO_TEXTO} alt="AGENDO" />
+          <span>Integra · Eventos · Caixa e fichas</span>
+        </footer>
+      </main>
+    </div>
+  );
+}
+
+function TelaAcesso({ evento, caixas, entrarComoPrincipal, entrarComoCaixa, usuario, sairSistema }) {
+  const caixasOperacao = caixas.filter((c) => c.ativo !== false);
+  const caixasSecundarios = caixasOperacao.filter((c) => c.tipo !== 'principal');
+  const caixasExibir = caixasSecundarios.length ? caixasSecundarios : caixasOperacao;
+
+  return (
+    <div className="login-agendo-page">
+      <div className="login-watermark-logo">
+        <img src={AGENDO_LOGO} alt="" />
+      </div>
+
+      <main className="login-conteudo">
+        <header className="login-institucional">
+          <div>AGENDO Integra</div>
+          <small>{usuario?.email || 'Usuário autenticado'} · escolha o acesso do evento</small>
+        </header>
+
+        <section className="login-grid">
+          <article className="login-card login-card-interno">
+            <div className="login-card-logo">
+              <img src={CAPETTE_LOGO} alt={evento?.instituicao || 'CAPETTE'} />
+            </div>
+
+            <div className="login-card-titulo">Área do Evento</div>
+            <div className="login-card-subtitulo">{evento?.nome || 'Sistema de fichas e caixa'}</div>
+
+            <div className="login-divisor" />
+
+            <button className="login-btn-primary" onClick={entrarComoPrincipal}>
+              Entrar como Caixa Principal
+            </button>
+
+            <div className="login-ajuda">
+              Acesso completo para coordenação, fechamento, relatórios, produtos e configurações.
+            </div>
+
+            <div className="login-restrito">
+              <i className="ti ti-lock" />
+              Acesso restrito à equipe autorizada.
+            </div>
+          </article>
+
+          <article className="login-card login-card-publico">
+            <div>
+              <div className="login-card-titulo">Caixas Operadores</div>
+              <div className="login-card-subtitulo">Venda rápida de fichas e reimpressão</div>
+
+              <div className="login-divisor soft" />
+
+              <p className="login-texto">
+                Selecione o caixa de atendimento para iniciar as vendas do evento. As vendas são registradas no sistema central e aparecem automaticamente no Caixa Principal.
+              </p>
+
+              <div className="login-caixas-lista">
+                {caixasExibir.length ? caixasExibir.map((c) => (
+                  <button className="login-caixa-btn" key={c.id} onClick={() => entrarComoCaixa(c.id)}>
+                    <span>{c.nome}</span>
+                    <strong>{c.operador || 'Operador'}</strong>
+                    <small>Venda e reimpressão de fichas</small>
+                  </button>
+                )) : (
+                  <button className="login-caixa-btn" onClick={() => entrarComoCaixa(null)}>
+                    <span>Caixa operador</span>
+                    <strong>Iniciar atendimento</strong>
+                    <small>Venda e reimpressão de fichas</small>
+                  </button>
+                )}
+              </div>
+
+              <div className="login-nota">
+                {evento?.instituicao || 'CAPETTE'} · {evento?.local_evento || 'Evento integrado ao AGENDO'}
+              </div>
+            </div>
+
+            <div className="login-publico-rodape">
+              <i className="ti ti-leaf" />
+              Operação simples para celular e balcão
+            </div>
+          </article>
+        </section>
+
+        <div className="login-trocar-usuario">
+          <button type="button" onClick={sairSistema}>Sair deste usuário</button>
         </div>
-      </section>
+
+        <footer className="login-footer">
+          <img src={AGENDO_TEXTO} alt="AGENDO" />
+          <span>Integra · Eventos · Caixa e fichas</span>
+        </footer>
+      </main>
     </div>
   );
 }
@@ -1717,68 +1982,248 @@ tr:last-child td { border-bottom: none; }
 }
 .tela-carregando { min-height: 100vh; display: grid; place-items: center; font-size: 18px; font-weight: 850; color: var(--ag-blue-dark); background: linear-gradient(135deg, var(--ag-bg), var(--ag-bg-2)); }
 
-.acesso-page {
+.login-agendo-page {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 28px;
-  position: relative;
-  overflow: hidden;
   background: linear-gradient(135deg, #F8F7F2 0%, #EEF4E8 100%);
-}
-.acesso-watermark {
-  position: fixed;
-  right: -28px;
-  bottom: -42px;
-  font-size: clamp(92px, 18vw, 250px);
-  font-weight: 950;
-  letter-spacing: -0.08em;
-  color: rgba(14,126,168,0.045);
-  pointer-events: none;
-  user-select: none;
-}
-.acesso-panel {
-  width: min(1040px, 100%);
-  border: 0.5px solid var(--ag-border);
-  border-radius: 28px;
-  background: rgba(255,255,255,0.62);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 24px 80px rgba(6,52,79,.08);
-  padding: 28px;
-  position: relative;
-}
-.acesso-logo-row { display: flex; align-items: center; gap: 16px; border-bottom: 0.5px solid var(--ag-border); padding-bottom: 20px; margin-bottom: 18px; }
-.acesso-logo { width: 64px; height: 64px; border-radius: 18px; background: var(--ag-blue); color: #fff; display: grid; place-items: center; font-weight: 950; font-size: 25px; letter-spacing: -.06em; box-shadow: 0 16px 38px rgba(14,126,168,.16); }
-.acesso-marca { color: var(--ag-blue); text-transform: uppercase; letter-spacing: .14em; font-size: 12px; font-weight: 950; }
-.acesso-logo-row h1 { margin: 1px 0 2px; color: var(--ag-blue-dark); font-size: 44px; line-height: 1; letter-spacing: -.055em; }
-.acesso-logo-row p { margin: 0; color: var(--ag-muted); font-size: 15px; }
-.acesso-evento { border: 0.5px solid rgba(14,126,168,.12); border-radius: 18px; background: rgba(248,247,242,.64); padding: 16px; margin-bottom: 18px; }
-.acesso-evento span { display: block; color: #B4B2A9; text-transform: uppercase; letter-spacing: .10em; font-size: 11px; font-weight: 800; }
-.acesso-evento strong { display: block; color: var(--ag-blue-dark); font-size: 22px; margin-top: 4px; }
-.acesso-evento small { display: block; color: var(--ag-muted); margin-top: 3px; font-size: 13px; }
-.acesso-opcoes { display: grid; grid-template-columns: .9fr 1.1fr; gap: 14px; align-items: stretch; }
-.acesso-caixas { display: grid; gap: 10px; }
-.acesso-caixas-titulo { padding: 4px 2px; }
-.acesso-caixas-titulo span { display: block; color: var(--ag-blue-dark); font-weight: 900; font-size: 16px; }
-.acesso-caixas-titulo small { display: block; color: var(--ag-muted); font-size: 12px; margin-top: 2px; }
-.acesso-opcao {
-  width: 100%;
-  border: 0.5px solid var(--ag-border);
-  border-radius: 18px;
-  background: rgba(255,255,255,.80);
-  text-align: left;
-  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  min-height: 106px;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  position: relative;
+  overflow: hidden;
 }
-.acesso-opcao:hover { border-color: rgba(14,126,168,.34); box-shadow: 0 12px 30px rgba(14,126,168,.08); }
-.acesso-opcao span { color: var(--ag-blue); font-size: 12px; font-weight: 950; text-transform: uppercase; letter-spacing: .08em; }
-.acesso-opcao strong { color: var(--ag-blue-dark); font-size: 20px; letter-spacing: -.03em; }
-.acesso-opcao small { color: var(--ag-muted); font-size: 13px; line-height: 1.35; }
-.acesso-opcao.principal { background: linear-gradient(135deg, rgba(14,126,168,.10), rgba(255,255,255,.82)); min-height: 100%; justify-content: center; }
-.acesso-opcao.principal strong { font-size: 24px; }
+.login-watermark-logo {
+  position: fixed;
+  left: -8vw;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.07;
+  filter: grayscale(100%);
+}
+.login-watermark-logo img {
+  width: 38vw;
+  max-width: 420px;
+  min-width: 240px;
+}
+.login-conteudo {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 740px;
+}
+.login-institucional {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+.login-institucional div {
+  font-size: 12px;
+  color: #888780;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.login-institucional small {
+  display: block;
+  font-size: 11px;
+  color: #B4B2A9;
+  margin-top: 2px;
+}
+.login-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.25rem;
+}
+.login-card {
+  border-radius: 16px;
+  border: .5px solid #E8E6DE;
+  padding: 1.5rem;
+  box-shadow: 0 2px 24px rgba(0,0,0,0.08);
+  backdrop-filter: blur(8px);
+  min-height: 368px;
+}
+.login-card-interno {
+  background: rgba(255,255,255,0.92);
+  display: flex;
+  flex-direction: column;
+}
+.login-card-publico {
+  background: linear-gradient(135deg, rgba(234,244,252,0.97) 0%, rgba(236,246,240,0.95) 60%, rgba(240,248,244,0.93) 100%);
+  border-color: #C0DD97;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.login-card-logo {
+  text-align: center;
+  margin-bottom: .85rem;
+}
+.login-card-logo img {
+  height: 44px;
+  width: auto;
+  max-width: 180px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 6px;
+}
+.login-card-titulo {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2C2C2A;
+  margin-bottom: 3px;
+  text-align: center;
+}
+.login-card-publico .login-card-titulo,
+.login-card-publico .login-card-subtitulo {
+  text-align: left;
+}
+.login-card-subtitulo {
+  font-size: 12px;
+  color: #888780;
+  text-align: center;
+  line-height: 1.45;
+}
+
+.login-form { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.login-form label { display: grid; gap: 4px; font-size: 12px; color: #5F5E5A; }
+.login-form input {
+  width: 100%;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: .5px solid #D3D1C7;
+  border-radius: 8px;
+  background: #FAFAF8;
+  color: #2C2C2A;
+}
+.login-alert { font-size: 12px; border-radius: 8px; padding: 7px 10px; border: .5px solid transparent; }
+.login-alert.erro { color: #E63214; background: #FEF2F2; border-color: #F7C1C1; }
+.login-alert.ok { color: #0E7EA8; background: #E6F1FB; border-color: #B5D4F4; }
+.login-link { background: none; border: none; font-size: 11px; color: #888780; cursor: pointer; text-decoration: underline; padding: 0; margin-top: 2px; }
+.login-beneficios { display: flex; flex-direction: column; gap: 8px; margin: 0 0 1rem; }
+.login-beneficios div { display: flex; align-items: center; gap: 8px; color: #0E7EA8; font-size: 12px; }
+.login-beneficios i { font-size: 15px; }
+.side-actions { display: grid; grid-template-columns: 1fr; gap: 6px; width: 100%; }
+.sair-acesso.danger { color: #E63214; border-color: rgba(230,50,20,.2); }
+
+.login-divisor {
+  height: .5px;
+  background: #E8E6DE;
+  margin: 1.25rem 0;
+}
+.login-divisor.soft {
+  background: rgba(0,0,0,0.08);
+  margin: 1rem 0;
+}
+.login-btn-primary {
+  width: 100%;
+  padding: 10px;
+  background: #0E7EA8;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+  letter-spacing: .02em;
+}
+.login-btn-primary:hover {
+  background: #0B6E93;
+}
+.login-ajuda {
+  margin-top: .75rem;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #888780;
+  text-align: center;
+}
+.login-restrito {
+  text-align: center;
+  margin-top: auto;
+  padding-top: 1rem;
+  font-size: 11px;
+  color: #B4B2A9;
+}
+.login-restrito span { margin-right: 4px; }
+.login-texto {
+  font-size: 12px;
+  color: #5F5E5A;
+  line-height: 1.7;
+  margin: 0 0 1rem;
+}
+.login-caixas-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 1rem;
+}
+.login-caixa-btn {
+  width: 100%;
+  background: rgba(255,255,255,.72);
+  border: .5px solid rgba(14,126,168,.18);
+  border-radius: 8px;
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+.login-caixa-btn:hover {
+  border-color: #0E7EA8;
+  background: #fff;
+}
+.login-caixa-btn span {
+  font-size: 12px;
+  color: #0E7EA8;
+  font-weight: 700;
+}
+.login-caixa-btn strong {
+  font-size: 13px;
+  color: #2C2C2A;
+  font-weight: 600;
+}
+.login-caixa-btn small {
+  font-size: 10.5px;
+  color: #888780;
+}
+.login-nota {
+  font-size: 10px;
+  color: #888780;
+  line-height: 1.6;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.5);
+  border-radius: 8px;
+}
+.login-publico-rodape {
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 11px;
+  color: #0E7EA8;
+}
+.login-publico-rodape i, .login-restrito i { margin-right: 4px; vertical-align: -1px; }
+.login-trocar-usuario { text-align: center; margin-top: 12px; }
+.login-trocar-usuario button { background: none; border: none; color: #888780; font-size: 11px; text-decoration: underline; cursor: pointer; }
+.login-footer {
+  margin-top: 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.login-footer img {
+  height: 18px;
+  width: auto;
+  opacity: .85;
+}
+.login-footer span {
+  font-size: 11px;
+  color: #B4B2A9;
+}
+
 .relatorio h2 { font-size: 17px; }
 .relatorio p { font-size: 12px; }
 
