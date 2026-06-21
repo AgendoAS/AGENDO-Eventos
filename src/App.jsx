@@ -2794,12 +2794,12 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
   .topo h1 { font-size: 21px; }
   .topo p { font-size: 11px; }
   .resumo-faixa { font-size: 11px; gap: 6px 10px; padding: 9px 11px; }
-  .grid-venda { gap: 12px; padding-bottom: 90px; }
+  .grid-venda { gap: 12px; }
   .produtos-grid { grid-template-columns: repeat(2, 1fr); gap: 9px; }
   .produto-btn { min-height: 86px; padding: 12px; border-radius: 14px; }
   .produto-btn strong { font-size: 13px; }
   .produto-btn span { font-size: 18px; }
-  .carrinho-card { padding-bottom: 4px; }
+  .carrinho-card { padding-bottom: 110px; }
   .lista-carrinho { max-height: 32vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .linha-carrinho { padding: 11px; }
   .qtd-actions button { width: 34px; height: 34px; font-size: 16px; }
