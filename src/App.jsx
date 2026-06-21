@@ -2540,9 +2540,9 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .app-shell.colapsado .rodape-side { flex-direction: column; padding: .7rem 0; }
 .user-badge { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 10px; flex-shrink: 0; }
 .user-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.user-info span { font-size: 10.5px; color: #7D7A72; }
-.user-info strong { font-size: 11px; color: #06344F; margin: 0; }
-.side-actions { display: flex; flex-direction: row; gap: 5px; }
+.user-info span { font-size: 10.5px; color: #7D7A72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-info strong { font-size: 11px; color: #06344F; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-actions { display: flex; flex-direction: row; gap: 5px; flex-shrink: 0; }
 .sair-acesso { border-radius: 50%; width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; }
 .sair-acesso.danger { color: #E63214; border-color: rgba(230,50,20,.2); }
 .rodape-conteudo {
