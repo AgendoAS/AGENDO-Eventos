@@ -833,6 +833,68 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function exportarCapette() {
+    const EVENTO_CAPETTE_ID = 1;            // FESTA JULINA 2026 (tabela eventos do CAPETTE)
+    const CATEGORIA_ID = 69;                // Eventos e Campanhas (entrada)
+    const SUBCATEGORIA_ID = 71;             // Venda de alimentos e bebidas
+    const CONTA_CARTAO_PIX = 1;             // Conta Principal
+    const CONTA_DINHEIRO = 5;               // Dinheiro
+
+    const validas = vendas.filter((v) => v.status !== 'cancelada' && v.forma_pagamento !== 'Fiado' && v.forma_pagamento !== 'Cortesia');
+
+    const colunas = [
+      'id', 'data', 'descricao', 'valor', 'tipo', 'nf', 'conta_id', 'categoria_id',
+      'conciliado', 'criado_por', 'criado_em', 'fornecedor', 'cpf_cnpj', 'num_nota',
+      'data_documento', 'local_comprovante', 'link_externo', 'bem_permanente', 'obs_prestacao',
+      'evento_id', 'campanha_id', 'plano_trabalho_id', 'status_lanc', 'extrato_mov_id',
+      'conferido_por', 'conferido_em', 'projeto_id', 'subcategoria_id', 'fornecedor_id', 'dispensa_nf',
+    ];
+
+    function linhaBase(data, descricao, valor, contaId) {
+      const base = {};
+      colunas.forEach((c) => { base[c] = ''; });
+      base.data = data;
+      base.descricao = descricao;
+      base.valor = String(Number(valor || 0).toFixed(2)).replace('.', ',');
+      base.tipo = 'entrada';
+      base.conta_id = contaId;
+      base.categoria_id = CATEGORIA_ID;
+      base.subcategoria_id = SUBCATEGORIA_ID;
+      base.evento_id = EVENTO_CAPETTE_ID;
+      base.conciliado = 'false';
+      return colunas.map((c) => base[c]).join(';');
+    }
+
+    const linhasCsv = [colunas.join(';')];
+
+    // Pix: uma linha por venda (assim aparece igual ao extrato bancário)
+    validas.filter((v) => v.forma_pagamento === 'Pix').forEach((v) => {
+      const data = new Date(v.criada_em).toISOString().slice(0, 10);
+      linhasCsv.push(linhaBase(data, `Venda fichas Pix - Venda no ${numero(v.numero)} - ${evento?.nome || 'Evento'}`, v.total, CONTA_CARTAO_PIX));
+    });
+
+    // Débito, Crédito, Dinheiro: uma linha resumida cada (bate com o depósito consolidado)
+    [
+      { forma: 'Débito', conta: CONTA_CARTAO_PIX },
+      { forma: 'Crédito', conta: CONTA_CARTAO_PIX },
+      { forma: 'Dinheiro', conta: CONTA_DINHEIRO },
+    ].forEach(({ forma, conta }) => {
+      const doForma = validas.filter((v) => v.forma_pagamento === forma);
+      if (!doForma.length) return;
+      const total = doForma.reduce((s, v) => s + Number(v.total || 0), 0);
+      const dataRef = doForma.length ? new Date(doForma[doForma.length - 1].criada_em).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+      linhasCsv.push(linhaBase(dataRef, `Venda fichas ${forma} (consolidado, ${doForma.length} venda(s)) - ${evento?.nome || 'Evento'}`, total, conta));
+    });
+
+    const blob = new Blob([linhasCsv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lancamentos-capette-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
 
   async function fazerLogin(e) {
     e.preventDefault();
@@ -1721,6 +1783,7 @@ export default function App() {
                   <div className="acoes">
                     <button className="botao" onClick={imprimirRelatorio}>Gerar PDF</button>
                     <button className="botao" onClick={exportarCsv}>Exportar CSV</button>
+                    <button className="botao verde" onClick={exportarCapette}><i className="ti ti-building-bank" /> Exportar p/ CAPETTE</button>
                   </div>
                 </div>
               </div>
