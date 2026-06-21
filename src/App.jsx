@@ -975,8 +975,12 @@ export default function App() {
               <p>{evento?.nome} • {modoAcesso === 'principal' ? 'Caixa Principal' : caixaAtual?.nome || 'Caixa Rápido'}</p>
             </div>
             <div className="topo-acoes">
-              <button className="topo-btn" onClick={() => setPagina('relatorios')}>Relatórios</button>
-              <button className="topo-btn principal" onClick={() => setPagina('vender')}>Nova venda</button>
+              {!(isMobile && modoAcesso === 'caixa') && (
+                <button className="topo-btn" onClick={() => setPagina('relatorios')}>Relatórios</button>
+              )}
+              {!(isMobile && pagina === 'vender') && (
+                <button className="topo-btn principal" onClick={() => setPagina('vender')}>Nova venda</button>
+              )}
             </div>
           </div>
 
@@ -1158,7 +1162,7 @@ export default function App() {
                 </div>
                 <button className="botao" onClick={carregarTudo}>Atualizar</button>
               </div>
-              <TabelaVendas vendas={vendas} marcarImpressa={marcarImpressa} imprimirVenda={imprimirVenda} cancelarVenda={cancelarVenda} caixaFechado={caixaFechado} />
+              <TabelaVendas vendas={vendas} marcarImpressa={marcarImpressa} imprimirVenda={imprimirVenda} cancelarVenda={cancelarVenda} caixaFechado={caixaFechado} isMobile={isMobile} />
             </section>
           )}
 
@@ -1172,7 +1176,7 @@ export default function App() {
                 </div>
                 <button className="botao" onClick={carregarTudo}>Atualizar</button>
               </div>
-              <TabelaVendas vendas={vendasDaTela} marcarImpressa={marcarImpressa} imprimirVenda={imprimirVenda} cancelarVenda={cancelarVenda} caixaFechado={caixaFechado} permitirCancelar={false} />
+              <TabelaVendas vendas={vendasDaTela} marcarImpressa={marcarImpressa} imprimirVenda={imprimirVenda} cancelarVenda={cancelarVenda} caixaFechado={caixaFechado} permitirCancelar={false} isMobile={isMobile} />
             </section>
           )}
 
@@ -1610,8 +1614,39 @@ function Tabela({ linhas, vazio }) {
   return <div className="tabela-scroll"><table><tbody>{linhas.map((l, idx) => <tr key={idx}>{l.map((c, i) => <td key={i}>{c}</td>)}</tr>)}</tbody></table></div>;
 }
 
-function TabelaVendas({ vendas, marcarImpressa, imprimirVenda, cancelarVenda, caixaFechado, permitirCancelar = true }) {
+function TabelaVendas({ vendas, marcarImpressa, imprimirVenda, cancelarVenda, caixaFechado, permitirCancelar = true, isMobile = false }) {
   if (!vendas.length) return <p className="vazio">Nenhuma venda ainda.</p>;
+
+  if (isMobile) {
+    return (
+      <div className="lista-vendas-mobile">
+        {vendas.map((v) => (
+          <div key={v.id} className={`venda-card ${v.status === 'cancelada' ? 'cancelada' : ''}`}>
+            <div className="venda-card-topo">
+              <strong>#{numero(v.numero)}</strong>
+              <span className="venda-card-valor">{moeda(v.total)}</span>
+            </div>
+            <div className="venda-card-meta">
+              <span>{new Date(v.criada_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+              <span>•</span>
+              <span>{v.forma_pagamento}</span>
+              <span>•</span>
+              <span className={v.status === 'cancelada' ? 'pill erro' : 'pill ok'}>{v.status}</span>
+            </div>
+            <div className="venda-card-itens">
+              {(v.itens || []).map((i) => `${i.quantidade}× ${i.nome_produto}`).join(' · ')}
+            </div>
+            <div className="venda-card-acoes">
+              <button className="mini" onClick={() => imprimirVenda(v.id)}>Reimprimir</button>
+              {v.impresso ? <span className="pill ok">Impresso</span> : <button className="mini" onClick={() => marcarImpressa(v)}>Marcar impresso</button>}
+              {permitirCancelar && v.status !== 'cancelada' && <button className="mini perigo" disabled={caixaFechado} onClick={() => cancelarVenda(v)}>Cancelar</button>}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="tabela-scroll">
       <table>
@@ -2779,6 +2814,19 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .drawer-mobile nav button { padding: 11px 1.2rem; }
 .drawer-mobile .rodape-side { padding: 13px 16px; }
 
+.lista-vendas-mobile { display: flex; flex-direction: column; gap: 9px; }
+.venda-card {
+  border: 0.5px solid #E8E6DE; border-radius: 14px; padding: 12px 14px;
+  background: rgba(255,255,255,0.85);
+}
+.venda-card.cancelada { opacity: .55; }
+.venda-card-topo { display: flex; justify-content: space-between; align-items: baseline; }
+.venda-card-topo strong { font-size: 14px; color: #06344F; }
+.venda-card-valor { font-size: 16px; font-weight: 800; color: #0E7EA8; }
+.venda-card-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11px; color: #7D7A72; margin-top: 4px; }
+.venda-card-itens { font-size: 11.5px; color: #5F5E5A; margin-top: 6px; line-height: 1.4; }
+.venda-card-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
+
 @media (max-width: 1000px) {
   .app-shell { grid-template-columns: 1fr; }
   input, select, textarea { font-size: 16px !important; }
@@ -2789,6 +2837,9 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
     box-shadow: 0 4px 14px rgba(6,52,79,.05);
   }
   .conteudo { padding-top: 1.1rem; }
+  .topo .eyebrow { display: none; }
+  .topo p { display: none; }
+  .topo { margin-bottom: .9rem; }
 
   /* Tela de venda — otimizada pra uso no celular pelos caixas */
   .topo h1 { font-size: 21px; }
