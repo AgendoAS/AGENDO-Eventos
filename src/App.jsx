@@ -1103,7 +1103,7 @@ export default function App() {
                 {pagamento === 'Dinheiro' && (
                   <div className="troco-box">
                     <label className="label">Valor recebido</label>
-                    <input value={valorRecebido} onChange={(e) => setValorRecebido(e.target.value)} placeholder="Ex.: 20" />
+                    <input value={valorRecebido} onChange={(e) => setValorRecebido(e.target.value)} placeholder="Ex.: 20" inputMode="decimal" />
                     <div className="troco-linha"><span>Troco</span><strong>{moeda(troco)}</strong></div>
                   </div>
                 )}
@@ -1122,8 +1122,8 @@ export default function App() {
                 <h2>Adicionar produto</h2>
                 <form className="linha-form" onSubmit={adicionarProduto}>
                   <input placeholder="Nome do produto" value={novoProduto.nome} onChange={(e) => setNovoProduto({ ...novoProduto, nome: e.target.value })} disabled={caixaFechado} />
-                  <input placeholder="Preço" value={novoProduto.preco} onChange={(e) => setNovoProduto({ ...novoProduto, preco: e.target.value })} disabled={caixaFechado} />
-                  <input placeholder="Estoque" value={novoProduto.estoque} onChange={(e) => setNovoProduto({ ...novoProduto, estoque: e.target.value })} disabled={caixaFechado} />
+                  <input placeholder="Preço" inputMode="decimal" value={novoProduto.preco} onChange={(e) => setNovoProduto({ ...novoProduto, preco: e.target.value })} disabled={caixaFechado} />
+                  <input placeholder="Estoque" inputMode="numeric" value={novoProduto.estoque} onChange={(e) => setNovoProduto({ ...novoProduto, estoque: e.target.value })} disabled={caixaFechado} />
                   <button className="botao verde" disabled={caixaFechado}>Adicionar</button>
                 </form>
               </div>
@@ -1318,7 +1318,7 @@ export default function App() {
                     <option>Reforço</option>
                     <option>Sangria</option>
                   </select>
-                  <input placeholder="Valor" value={movimento.valor} disabled={caixaFechado} onChange={(e) => setMovimento({ ...movimento, valor: e.target.value })} />
+                  <input placeholder="Valor" inputMode="decimal" value={movimento.valor} disabled={caixaFechado} onChange={(e) => setMovimento({ ...movimento, valor: e.target.value })} />
                   <input placeholder="Motivo/observação" value={movimento.motivo} disabled={caixaFechado} onChange={(e) => setMovimento({ ...movimento, motivo: e.target.value })} />
                   <button className="botao verde" disabled={caixaFechado}>Registrar</button>
                 </form>
@@ -2777,6 +2777,7 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 
 @media (max-width: 1000px) {
   .app-shell { grid-template-columns: 1fr; }
+  input, select, textarea { font-size: 16px !important; }
   .topo-mobile {
     margin: 0 0 1rem;
     border-radius: 14px;
