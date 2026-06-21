@@ -958,7 +958,9 @@ export default function App() {
         {isMobile && menuAberto && (
           <>
             <div className="drawer-overlay" onClick={() => setMenuAberto(false)} />
-            <div className="drawer-mobile">{sidebarMarkup}</div>
+            <div className="drawer-mobile">
+              <div className="drawer-mobile-inner">{sidebarMarkup}</div>
+            </div>
           </>
         )}
 
@@ -2726,8 +2728,13 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 99; animation: fadeIn .18s ease; }
 .drawer-mobile {
   position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; width: 240px;
-  overflow-y: auto; background: #FCFBF8;
+  background: #FCFBF8; overflow: hidden;
   animation: drawerIn .22s cubic-bezier(.2,.8,.3,1);
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+.drawer-mobile-inner {
+  height: 100%; width: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
 .drawer-mobile .sidebar {
   width: 240px;
