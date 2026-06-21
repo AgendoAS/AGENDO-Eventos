@@ -706,6 +706,17 @@ export default function App() {
     carregarTudo();
   }
 
+  async function alternarMeuCaixa() {
+    if (!caixaAtual) return;
+    const fechando = caixaAtual.ativo !== false;
+    if (fechando && !confirm(`Fechar o ${caixaAtual.nome}? Ele vai parar de aparecer na tela de acesso até ser reaberto.`)) return;
+    const { data, error } = await supabase.from('caixas').update({ ativo: !fechando }).eq('id', caixaAtual.id).select();
+    if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Não foi possível atualizar (possível bloqueio de permissão).');
+    aviso(fechando ? `${caixaAtual.nome} fechado.` : `${caixaAtual.nome} reaberto.`);
+    carregarTudo();
+  }
+
   function imprimirRelatorio() {
     document.body.classList.remove('imprimindo-fichas');
     document.body.classList.add('imprimindo-relatorio');
@@ -1107,7 +1118,7 @@ export default function App() {
               {!(isMobile && modoAcesso === 'caixa') && (
                 <button className="topo-btn" onClick={() => setPagina('relatorios')}>Relatórios</button>
               )}
-              {!(isMobile && pagina === 'vender') && (
+              {!(isMobile && (pagina === 'vender' || modoAcesso === 'caixa')) && (
                 <button className="topo-btn principal" onClick={() => setPagina('vender')}>Nova venda</button>
               )}
             </div>
@@ -1121,8 +1132,12 @@ export default function App() {
               <span>{modoAcesso === 'principal' ? 'Total geral' : 'Meu caixa'}: <b>{moeda(modoAcesso === 'principal' ? resumo.totalVendido : totalDaTela)}</b></span>
               <span>Vendas: <b>{modoAcesso === 'principal' ? vendasValidas.length : vendasValidasDaTela.length}</b></span>
               <span>Fichas: <b>{modoAcesso === 'principal' ? resumo.fichas : fichasDaTela}</b></span>
-              <span>Produtos ativos: <b>{produtosAtivos}</b></span>
-              <span>Estoque: <b>{estoqueTotal}</b></span>
+              {!(isMobile && modoAcesso === 'caixa') && (
+                <>
+                  <span>Produtos ativos: <b>{produtosAtivos}</b></span>
+                  <span>Estoque: <b>{estoqueTotal}</b></span>
+                </>
+              )}
             </div>
           )}
 
@@ -1187,7 +1202,7 @@ export default function App() {
                     <h2>Vender fichas</h2>
                     <p>{modoAcesso === 'principal' ? 'Venda feita pelo Caixa Principal. Também entra no fechamento geral.' : 'Venda rápida do caixa selecionado.'}</p>
                   </div>
-                  <span className="pill ok">{caixaAtual?.nome || 'Caixa'}</span>
+                  {!(isMobile && modoAcesso === 'caixa') && <span className="pill ok">{caixaAtual?.nome || 'Caixa'}</span>}
                 </div>
                 {categoriasProduto.length > 2 && (
                   <div className="categorias-tabs no-print">
@@ -1356,7 +1371,12 @@ export default function App() {
                   <h2>Vendas</h2>
                   <p>{caixaAtual?.nome || 'Caixa'} • apenas vendas deste caixa.</p>
                 </div>
-                <button className="botao" onClick={carregarTudo}>Atualizar</button>
+                <div className="acoes">
+                  <button className={`botao ${caixaAtual?.ativo === false ? 'verde' : ''}`} onClick={alternarMeuCaixa}>
+                    {caixaAtual?.ativo === false ? 'Abrir meu caixa' : 'Fechar meu caixa'}
+                  </button>
+                  <button className="botao" onClick={carregarTudo}>Atualizar</button>
+                </div>
               </div>
               <TabelaVendas vendas={vendasDaTela} marcarImpressa={marcarImpressa} imprimirVenda={imprimirVenda} cancelarVenda={cancelarVenda} caixaFechado={caixaFechado} permitirCancelar={true} isMobile={isMobile} marcarFiadoRecebido={marcarFiadoRecebido} />
             </section>
@@ -1604,7 +1624,6 @@ export default function App() {
           fichasParaImprimir.map((item) => (
             <div className="ficha-termica" key={`${vendaParaImprimir.id}-${item.numero}`}>
               <div className="ficha-topo">AGENDO EVENTOS</div>
-              <h2>FICHA {ficha(item.numero)}</h2>
               <h1>{item.produto}</h1>
               <h3>{moeda(item.valor)}</h3>
               <div className="linha-pontilhada" />
