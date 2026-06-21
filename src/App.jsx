@@ -2754,6 +2754,11 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .busca-item:hover { background: rgba(14,126,168,0.08); }
 .busca-item i { font-size: 15px; color: #888780; }
 
+@keyframes menuSlideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @media (max-width: 1000px) {
   .app-shell { grid-template-columns: 1fr; }
   .app-shell .sidebar {
@@ -2769,14 +2774,23 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
     border: none;
     border-radius: 0 0 22px 22px;
     box-shadow: 0 16px 30px rgba(6,52,79,.10);
+    margin-bottom: 14px;
+    animation: menuSlideDown .22s cubic-bezier(.2,.8,.3,1);
   }
+  .app-shell .sidebar .brand { padding: 16px 18px; }
+  .app-shell .sidebar .evento-card { margin: 12px 16px; padding: 14px 16px; }
+  .app-shell .sidebar nav { padding: 6px 0 12px; }
+  .app-shell .sidebar .nav-secao { margin-bottom: 2px; }
+  .app-shell .sidebar .nav-secao-titulo { padding: 13px 1.2rem 4px; }
+  .app-shell .sidebar nav button { padding: 11px 1.2rem; }
+  .app-shell .sidebar .rodape-side { padding: 13px 16px; }
   .topo-mobile {
-    margin: 0 0 .85rem;
+    margin: 0 0 1rem;
     border-radius: 14px;
     border: 0.5px solid #E8E6DE;
     box-shadow: 0 4px 14px rgba(6,52,79,.05);
   }
-  .conteudo { padding-top: 1rem; }
+  .conteudo { padding-top: 1.1rem; }
 }
 
 `;
