@@ -1688,11 +1688,23 @@ export default function App() {
               <div className="card">
                 <h2>Impressão direta no Android (RawBT)</h2>
                 <p>
-                  Se este celular for Android e tiver o app <strong>RawBT</strong> instalado e pareado com a impressora térmica,
-                  ative isso pra imprimir sem abrir a telinha de impressão do sistema — manda direto pra impressora.
-                  Em iPhone isso não tem efeito (sempre usa a tela normal de impressão).
+                  Imprime direto na impressora Bluetooth, <strong>sem abrir a telinha de impressão</strong>.
+                  É o jeito mais rápido no celular. Em iPhone não tem efeito (usa a tela normal).
                 </p>
-                <label className="opcao-toggle">
+                <div className="rawbt-passos">
+                  <strong>Como configurar (uma vez só, em cada celular):</strong>
+                  <ol>
+                    <li>Instale o app <strong>RawBT</strong> (botão abaixo).</li>
+                    <li>No <strong>Bluetooth do celular</strong>, pareie a impressora.</li>
+                    <li>Abra o <strong>RawBT uma vez</strong> e escolha a impressora nas configurações dele.</li>
+                    <li>Volte aqui e <strong>ative</strong> o botão abaixo.</li>
+                    <li>Ao finalizar a venda, toque em <strong>“Imprimir fichas”</strong> — sai direto. 🎉</li>
+                  </ol>
+                </div>
+                <a className="botao" style={{ textDecoration: 'none' }} href="https://play.google.com/store/apps/details?id=ru.a402d.rawbtprinter" target="_blank" rel="noreferrer">
+                  <i className="ti ti-download" /> Instalar RawBT (Play Store)
+                </a>
+                <label className="opcao-toggle" style={{ marginTop: 12 }}>
                   <input type="checkbox" checked={impressaoRawBT} onChange={(e) => setImpressaoRawBT(e.target.checked)} />
                   Usar impressão direta via RawBT neste aparelho
                 </label>
@@ -3485,6 +3497,8 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .pos-venda-chip.sorteio { color: #06344F; background: #EAF6FB; border: 1px solid #CDE8F3; }
 .pos-venda-imprimir { width: 100%; font-size: 17px; padding: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .pos-venda-nova { width: 100%; margin-top: 10px; background: none; border: none; color: #7D7A72; font-size: 13.5px; padding: 8px; cursor: pointer; text-decoration: underline; }
+.rawbt-passos { font-size: 13px; color: #5F5E5A; margin: 10px 0; background: #F7F6F1; border: 1px solid #E7E5DC; border-radius: 10px; padding: 12px 14px; }
+.rawbt-passos ol { margin: 6px 0 0; padding-left: 20px; line-height: 1.7; }
 .venda-card-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
 
 @media (max-width: 1000px) {
