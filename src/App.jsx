@@ -120,7 +120,7 @@ export default function App() {
   const [caixaSelecionadoId, setCaixaSelecionadoId] = useState(() => localStorage.getItem('agendo_eventos_caixa_id') || '');
   const [papelImpressao, setPapelImpressao] = useState(() => localStorage.getItem('agendo_eventos_papel') || '58');
   const [impressaoRawBT, setImpressaoRawBT] = useState(() => localStorage.getItem('agendo_eventos_rawbt') === '1');
-  const [eventoForm, setEventoForm] = useState({ nome: '', instituicao: '', local_evento: '', data_evento: '' });
+  const [eventoForm, setEventoForm] = useState({ nome: '', instituicao: '', local_evento: '', data_evento: '', sorteio_valor_por_numero: '' });
   const [novoCaixa, setNovoCaixa] = useState({ nome: '', operador: '', tipo: 'secundario' });
 
   async function carregarTudo() {
@@ -292,8 +292,9 @@ export default function App() {
       instituicao: evento.instituicao || '',
       local_evento: evento.local_evento || '',
       data_evento: evento.data_evento || '',
+      sorteio_valor_por_numero: evento.sorteio_valor_por_numero ?? 10,
     });
-  }, [evento?.id, evento?.nome, evento?.instituicao, evento?.local_evento, evento?.data_evento]);
+  }, [evento?.id, evento?.nome, evento?.instituicao, evento?.local_evento, evento?.data_evento, evento?.sorteio_valor_por_numero]);
 
   const vendasValidas = useMemo(
     () => vendas.filter((v) => v.status !== 'cancelada'),
@@ -1046,6 +1047,7 @@ export default function App() {
       instituicao: eventoForm.instituicao.trim() || 'Instituição',
       local_evento: eventoForm.local_evento.trim() || null,
       data_evento: eventoForm.data_evento || null,
+      sorteio_valor_por_numero: Math.max(0, Number(String(eventoForm.sorteio_valor_por_numero).replace(',', '.')) || 0),
     };
     const { data, error } = await supabase.from('eventos').update(payload).eq('id', EVENTO_ID).select();
     if (error) return setErro(error.message);
@@ -1628,6 +1630,18 @@ export default function App() {
                   <label><span>Data</span><input type="date" value={eventoForm.data_evento || ''} onChange={(e) => setEventoForm({ ...eventoForm, data_evento: e.target.value })} /></label>
                   <button className="botao verde">Salvar dados do evento</button>
                 </form>
+              </div>
+
+              <div className="card">
+                <h2>🎟️ Sorteio da festa</h2>
+                <p>A cada valor em compras, o cliente ganha um número para o sorteio. Você pode mudar a regra a qualquer momento — vale para as próximas vendas.</p>
+                <form className="form-grid" onSubmit={salvarDadosEvento}>
+                  <label><span>A cada R$ ___ em compras = 1 número</span><input inputMode="decimal" placeholder="10" value={eventoForm.sorteio_valor_por_numero} onChange={(e) => setEventoForm({ ...eventoForm, sorteio_valor_por_numero: e.target.value })} /></label>
+                  <button className="botao verde">Salvar regra do sorteio</button>
+                </form>
+                <div className="nota-config">
+                  Exemplos: <b>10</b> → a cada R$10; <b>20</b> → a cada R$20 (compra de R$50 gera 2 números). Coloque <b>0</b> para <b>desligar</b> o sorteio. Cortesia não gera número.
+                </div>
               </div>
             </section>
           )}

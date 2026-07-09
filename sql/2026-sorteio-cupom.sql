@@ -1,15 +1,11 @@
 -- ============================================================================
--- SORTEIO DA FESTA — "a cada R$10, um número"
+-- SORTEIO DA FESTA — "a cada R$X, um número" (valor configurável no app)
 -- ----------------------------------------------------------------------------
--- Rode este script UMA VEZ no Supabase (SQL Editor) ANTES de publicar o app.
--- Ele cria:
---   1) a tabela sorteio_numeros (cada linha = um número da sorte já emitido)
---   2) a função emitir_numeros_sorteio(venda) que gera os números de forma
---      ATÔMICA (número único e sequencial, mesmo com vários caixas ao mesmo
---      tempo — igual às fichas)
---   3) a permissão de leitura (RLS) pro app conseguir mostrar/imprimir
+-- Script completo do zero. Rode no Supabase (SQL Editor puro, NÃO na "Assistente
+-- de IA"). É seguro rodar de novo (idempotente).
 --
--- Regra: floor(total / 10). Ex.: R$25 = 2 números, R$9 = nenhum.
+-- Regra: floor(total / valor_por_numero). O valor é configurado por evento na
+--        tela "Dados do evento" do app (padrão R$10; 0 desliga o sorteio).
 --        Vendas canceladas e Cortesia NÃO geram número. Fiado gera.
 -- ============================================================================
 
@@ -26,6 +22,10 @@ create table if not exists public.sorteio_numeros (
 create index if not exists idx_sorteio_venda  on public.sorteio_numeros (venda_id);
 create index if not exists idx_sorteio_evento on public.sorteio_numeros (evento_id);
 
+-- 1b) Regra configurável por evento (a cada R$X = 1 número; padrão 10) ----------
+alter table public.eventos
+  add column if not exists sorteio_valor_por_numero numeric not null default 10;
+
 -- 2) Função que emite os números (atômica + idempotente) ------------------------
 create or replace function public.emitir_numeros_sorteio(p_venda_id uuid)
 returns table (numero integer)
@@ -39,6 +39,7 @@ declare
   v_total  numeric;
   v_forma  text;
   v_status text;
+  v_valor  numeric;
   v_qtd    integer;
   v_max    integer;
 begin
@@ -52,7 +53,16 @@ begin
     return;                               -- venda não existe
   end if;
 
-  -- idempotente: se já emitiu, devolve o que já tem e não gera de novo
+  -- vendas canceladas ou cortesia não geram número
+  if v_status = 'cancelada' or v_forma = 'Cortesia' then
+    return;
+  end if;
+
+  -- trava o evento (serializa a numeração, sem repetir entre caixas) e lê a regra
+  select coalesce(sorteio_valor_por_numero, 10) into v_valor
+    from public.eventos where id = v_evento for update;
+
+  -- idempotente (já sob a trava): se já emitiu, devolve o que tem e não gera de novo
   if exists (select 1 from public.sorteio_numeros where venda_id = p_venda_id) then
     return query
       select s.numero from public.sorteio_numeros s
@@ -61,19 +71,15 @@ begin
     return;
   end if;
 
-  -- vendas canceladas ou cortesia não geram número
-  if v_status = 'cancelada' or v_forma = 'Cortesia' then
+  -- valor 0 (ou inválido) = sorteio desligado
+  if v_valor is null or v_valor <= 0 then
     return;
   end if;
 
-  v_qtd := floor(coalesce(v_total, 0) / 10)::int;   -- 1 número a cada R$10
+  v_qtd := floor(coalesce(v_total, 0) / v_valor)::int;   -- 1 número a cada R$ v_valor
   if v_qtd < 1 then
     return;
   end if;
-
-  -- trava por evento => numeração sequencial sem repetição, mesmo com
-  -- vários caixas finalizando ao mesmo tempo
-  perform 1 from public.eventos where id = v_evento for update;
 
   select coalesce(max(s.numero), 0) into v_max
     from public.sorteio_numeros s
