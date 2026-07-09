@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { EVENTO_ID, supabase } from './lib/supabaseClient';
+
+const BluetoothPrinter = registerPlugin('BluetoothPrinter');
+const APP_NATIVO = Capacitor.isNativePlatform();
+
+// converte o payload ESC/POS (1 caractere = 1 byte) para base64, pra enviar ao plugin nativo
+function escposParaBase64(texto) {
+  let bin = '';
+  for (let i = 0; i < texto.length; i += 1) bin += String.fromCharCode(texto.charCodeAt(i) & 0xff);
+  return btoa(bin);
+}
 
 const CATEGORIAS_FIXAS = ['Salgados', 'Doces', 'Bebidas', 'Brincadeiras', 'Geral'];
 
@@ -121,6 +132,9 @@ export default function App() {
   const [caixaSelecionadoId, setCaixaSelecionadoId] = useState(() => localStorage.getItem('agendo_eventos_caixa_id') || '');
   const [papelImpressao, setPapelImpressao] = useState(() => localStorage.getItem('agendo_eventos_papel') || '58');
   const [impressaoRawBT, setImpressaoRawBT] = useState(() => localStorage.getItem('agendo_eventos_rawbt') === '1');
+  const [impressoraBt, setImpressoraBt] = useState(() => localStorage.getItem('agendo_eventos_impressora_bt') || '');
+  const [impressoraBtNome, setImpressoraBtNome] = useState(() => localStorage.getItem('agendo_eventos_impressora_bt_nome') || '');
+  const [impressorasBt, setImpressorasBt] = useState([]);
   const [eventoForm, setEventoForm] = useState({ nome: '', instituicao: '', local_evento: '', data_evento: '', sorteio_valor_por_numero: '' });
   const [novoCaixa, setNovoCaixa] = useState({ nome: '', operador: '', tipo: 'secundario' });
 
@@ -583,20 +597,85 @@ export default function App() {
     return cmd;
   }
 
-  function imprimirViaRawBT(vendaRef) {
+  function payloadEscPos(vendaRef) {
     const fichas = montarFichasDeVenda(vendaRef);
     const numeros = numerosSorteioDaVenda(vendaRef);
-    if (!fichas.length && !numeros.length) return;
+    if (!fichas.length && !numeros.length) return '';
     let payload = fichas.map((item) => montarFichaEscPos(item, vendaRef)).join('');
     payload += montarCupomSorteioEscPos(numeros, vendaRef);
-    const textEncoded = encodeURI(payload);
-    const intentUrl = `intent:${textEncoded}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
+    return payload;
+  }
+
+  function imprimirViaRawBT(vendaRef) {
+    const payload = payloadEscPos(vendaRef);
+    if (!payload) return;
+    const intentUrl = `intent:${encodeURI(payload)}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
     window.location.href = intentUrl;
   }
 
+  // Impressão direta na impressora Bluetooth quando roda dentro do APK (sem RawBT, sem telinha).
+  async function imprimirNativo(vendaRef) {
+    const payload = payloadEscPos(vendaRef);
+    if (!payload) return;
+    if (!impressoraBt) {
+      setErro('Escolha a impressora Bluetooth em "Config. impressora" antes de imprimir.');
+      setPagina('impressora');
+      return;
+    }
+    try {
+      await BluetoothPrinter.connect({ address: impressoraBt });
+      await BluetoothPrinter.write({ data: escposParaBase64(payload) });
+      // Não fecha o socket aqui de propósito: fechar logo após o envio pode cortar
+      // a impressão no meio. A próxima impressão reconecta (o plugin fecha o antigo).
+    } catch (e) {
+      setErro(`Não consegui imprimir na Bluetooth: ${e?.message || e}. Confira se a impressora está ligada e pareada.`);
+    }
+  }
+
+  async function listarImpressorasBt() {
+    setErro('');
+    try {
+      const res = await BluetoothPrinter.list();
+      const devs = res?.devices || [];
+      setImpressorasBt(devs);
+      if (!devs.length) aviso('Nenhuma impressora pareada encontrada. Pareie a impressora no Bluetooth do celular primeiro.');
+    } catch (e) {
+      setErro(`Não consegui listar as impressoras: ${e?.message || e}`);
+    }
+  }
+
+  function selecionarImpressoraBt(d) {
+    setImpressoraBt(d.address);
+    setImpressoraBtNome(d.name || d.address);
+    localStorage.setItem('agendo_eventos_impressora_bt', d.address);
+    localStorage.setItem('agendo_eventos_impressora_bt_nome', d.name || d.address);
+    aviso(`Impressora "${d.name || d.address}" escolhida.`);
+  }
+
+  async function testarImpressaoBt() {
+    if (!impressoraBt) { setErro('Escolha a impressora primeiro.'); return; }
+    setErro('');
+    const ESC = '\x1B'; const GS = '\x1D';
+    const teste = ESC + '@' + ESC + 'a' + '\x01'
+      + ESC + 'E' + '\x01' + 'AGENDO EVENTOS\n' + ESC + 'E' + '\x00'
+      + 'Teste de impressao\n' + paraTextoTermico(hojeBR()) + '\n\n\n\n' + GS + 'V' + '\x00';
+    try {
+      await BluetoothPrinter.connect({ address: impressoraBt });
+      await BluetoothPrinter.write({ data: escposParaBase64(teste) });
+      aviso('Teste enviado! Saiu na impressora?');
+    } catch (e) {
+      setErro(`Falha no teste: ${e?.message || e}`);
+    }
+  }
+
   function abrirImpressaoFichas(vendaRef) {
+    const ref = vendaRef || vendaParaImprimir;
+    if (APP_NATIVO && impressoraBt) {
+      imprimirNativo(ref);
+      return;
+    }
     if (ehAndroid() && impressaoRawBT) {
-      imprimirViaRawBT(vendaRef || vendaParaImprimir);
+      imprimirViaRawBT(ref);
       return;
     }
     document.body.classList.remove('imprimindo-relatorio');
@@ -1669,6 +1748,31 @@ export default function App() {
 
           {pagina === 'impressora' && (
             <section className="stack">
+              {APP_NATIVO && (
+                <div className="card">
+                  <h2><i className="ti ti-bluetooth" /> Impressora Bluetooth (direto no app)</h2>
+                  <p>No app instalado, imprime <strong>direto</strong> na impressora Bluetooth — sem RawBT e sem telinha. Pareie a impressora no Bluetooth do celular, depois procure e escolha ela aqui.</p>
+                  <div className="nota-config">
+                    {impressoraBtNome
+                      ? <>Impressora escolhida: <b>{impressoraBtNome}</b></>
+                      : 'Nenhuma impressora escolhida ainda.'}
+                  </div>
+                  <div className="acoes">
+                    <button className="botao" onClick={listarImpressorasBt}><i className="ti ti-refresh" /> Procurar impressoras pareadas</button>
+                    <button className="botao verde" disabled={!impressoraBt} onClick={testarImpressaoBt}><i className="ti ti-printer" /> Imprimir teste</button>
+                  </div>
+                  {impressorasBt.length > 0 && (
+                    <div className="opcoes-grid" style={{ marginTop: 12 }}>
+                      {impressorasBt.map((d) => (
+                        <button key={d.address} className={`opcao-card ${impressoraBt === d.address ? 'ativa' : ''}`} onClick={() => selecionarImpressoraBt(d)}>
+                          <strong>{d.name || 'Sem nome'}</strong>
+                          <span>{d.address}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="card">
                 <h2>Configuração da impressora</h2>
                 <p>Configuração local deste computador/celular. O banco continua igual para todos os caixas.</p>
