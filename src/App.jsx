@@ -466,7 +466,12 @@ export default function App() {
       if (existe) {
         return atual.map((item) => item.id === produto.id ? { ...item, quantidade: item.quantidade + 1 } : item);
       }
-      return [...atual, { id: produto.id, nome: produto.nome, preco: Number(produto.preco || 0), quantidade: 1 }];
+      // Usa o preço promocional quando a promoção está ativa, pra bater com o que o
+      // servidor grava e com o que sai impresso na ficha (senão o caixa cobra cheio
+      // e o sistema registra o promocional).
+      const emPromo = produto.promocao_ativa && produto.preco_promocional != null;
+      const precoVenda = emPromo ? Number(produto.preco_promocional || 0) : Number(produto.preco || 0);
+      return [...atual, { id: produto.id, nome: produto.nome, preco: precoVenda, quantidade: 1 }];
     });
   }
 
@@ -660,7 +665,9 @@ export default function App() {
         abrirImpressaoFichas(vendaCompleta);
       }
 
-      setMensagem(`Venda ${numero(resultado?.numero)} finalizada. Imprimindo fichas ${ficha(resultado?.primeira_ficha)} a ${ficha(resultado?.ultima_ficha)}.`);
+      const qtdSorteio = (vendaCompleta?.sorteio || []).length;
+      const avisoSorteio = qtdSorteio > 0 ? ` Cupom de sorteio: ${qtdSorteio} número(s).` : '';
+      setMensagem(`Venda ${numero(resultado?.numero)} finalizada. Imprimindo fichas ${ficha(resultado?.primeira_ficha)} a ${ficha(resultado?.ultima_ficha)}.${avisoSorteio}`);
       setCarrinho([]);
       setPagamento('Pix');
       setValorRecebido('');
