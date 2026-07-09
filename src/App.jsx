@@ -526,6 +526,7 @@ export default function App() {
     cmd += ESC + 'E' + '\x00';        // negrito off
     cmd += GS + '!' + '\x00';         // tamanho normal
     cmd += `${nomeCaixa} - Venda ${numeroVenda}\n`;
+    cmd += 'AGENDO EVENTOS\n';        // marca (rodape)
     cmd += `${linha}\n`;              // marca de fim da ficha
     cmd += '\n\n\n';                  // espaço pra rasgar (bem menor)
     cmd += GS + 'V' + '\x00';         // corta papel
@@ -575,6 +576,7 @@ export default function App() {
     cmd += GS + '!' + '\x00';
     cmd += `${paraTextoTermico(evento?.nome || 'Evento')}\n`;
     cmd += `${nomeCaixa} - Venda ${numeroVenda}\n`;
+    cmd += 'AGENDO EVENTOS\n';        // marca (rodape)
     cmd += `${linha}\n`;              // fim do cupom
     cmd += '\n\n\n';                  // espaço pra rasgar (bem menor)
     cmd += GS + 'V' + '\x00';         // corta papel
@@ -1912,6 +1914,7 @@ export default function App() {
               <h1>{item.produto}</h1>
               <h3>{moeda(item.valor)}</h3>
               <p>{vendaParaImprimir.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa'} • Venda nº {numero(vendaParaImprimir.numero)}</p>
+              <div className="ficha-marca">AGENDO EVENTOS</div>
             </div>
           ))
         ) : <div />}
@@ -1924,6 +1927,7 @@ export default function App() {
             <div className="linha-pontilhada" />
             <p>{evento?.nome || 'Evento'}</p>
             <p>{vendaParaImprimir.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa'} • Venda nº {numero(vendaParaImprimir.numero)}</p>
+            <div className="ficha-marca">AGENDO EVENTOS</div>
           </div>
         )}
       </div>
@@ -3087,6 +3091,7 @@ tr:last-child td { border-bottom: none; }
 .ficha-termica h1 { font-size: 22px; margin: 2px 0; text-transform: uppercase; color: #000; line-height: 1.05; }
 .ficha-termica h3 { font-size: 15px; font-weight: 800; margin: 1px 0 2px; color: #000; }
 .ficha-termica p { font-size: 8px; margin: 1px 0; color: #000; }
+.ficha-marca { font-size: 8px; font-weight: 900; letter-spacing: 1px; margin-top: 2px; }
 .cupom-sorteio .ficha-topo { font-size: 12px; }
 .cupom-sorteio h1 { font-size: 30px; letter-spacing: 2px; margin: 2px 0; }
 .linha-pontilhada { border-top: 1px dashed #000; margin: 4px 0; }
