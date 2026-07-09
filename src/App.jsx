@@ -104,6 +104,7 @@ export default function App() {
   const [salvandoVenda, setSalvandoVenda] = useState(false);
   const [vendaImpressaoId, setVendaImpressaoId] = useState(null);
   const [vendaImpressaoDireta, setVendaImpressaoDireta] = useState(null);
+  const [vendaConcluida, setVendaConcluida] = useState(null);
 
   const [colapsado, setColapsado] = useState(() => localStorage.getItem('agendo_eventos_menu_colapsado') === '1');
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1000);
@@ -663,18 +664,20 @@ export default function App() {
         vendaCompleta = await buscarVendaParaImpressao(vendaId);
         setVendaImpressaoDireta(vendaCompleta);
         setVendaImpressaoId(vendaId);
-        abrirImpressaoFichas(vendaCompleta);
+        // Não imprime automático: abre a confirmação com o botão "Imprimir".
+        // O toque no botão é um gesto do usuário, então o navegador do celular
+        // libera a impressão (o print automático depois do await era bloqueado).
+        setVendaConcluida(vendaCompleta);
       }
 
       const qtdSorteio = (vendaCompleta?.sorteio || []).length;
       const avisoSorteio = qtdSorteio > 0 ? ` Cupom de sorteio: ${qtdSorteio} número(s).` : '';
-      setMensagem(`Venda ${numero(resultado?.numero)} finalizada. Imprimindo fichas ${ficha(resultado?.primeira_ficha)} a ${ficha(resultado?.ultima_ficha)}.${avisoSorteio}`);
+      setMensagem(`Venda ${numero(resultado?.numero)} finalizada.${avisoSorteio}`);
       setCarrinho([]);
       setPagamento('Pix');
       setValorRecebido('');
       setPessoaFiadoSelecionada('');
       await carregarTudo();
-      setPagina('vendas');
     } catch (e) {
       setErro(e.message || 'Erro ao finalizar venda.');
     } finally {
@@ -1295,6 +1298,28 @@ export default function App() {
           </div>
         )}
 
+        {vendaConcluida && (
+          <div className="pos-venda-overlay no-print" onClick={(e) => { if (e.target === e.currentTarget) setVendaConcluida(null); }}>
+            <div className="pos-venda-card">
+              <div className="pos-venda-check"><i className="ti ti-check" /></div>
+              <h2>Venda Nº {numero(vendaConcluida.numero)} concluída!</h2>
+              <div className="pos-venda-total">{moeda(vendaConcluida.total)} · {vendaConcluida.forma_pagamento}</div>
+              <div className="pos-venda-chips">
+                <span className="pos-venda-chip"><i className="ti ti-ticket" /> {(vendaConcluida.itens || []).reduce((a, i) => a + Number(i.quantidade || 0), 0)} ficha(s)</span>
+                {(vendaConcluida.sorteio || []).length > 0 && (
+                  <span className="pos-venda-chip sorteio"><i className="ti ti-gift" /> Sorteio: {(vendaConcluida.sorteio || []).map((s) => ficha(s.numero)).join(', ')}</span>
+                )}
+              </div>
+              <button className="botao verde pos-venda-imprimir" autoFocus onClick={() => abrirImpressaoFichas(vendaConcluida)}>
+                <i className="ti ti-printer" /> Imprimir fichas
+              </button>
+              <button className="pos-venda-nova" onClick={() => { setVendaConcluida(null); setMensagem(''); }}>
+                Fechar e fazer nova venda
+              </button>
+            </div>
+          </div>
+        )}
+
         {!isMobile && sidebarMarkup}
 
         {isMobile && menuAberto && (
@@ -1354,7 +1379,7 @@ export default function App() {
             <div className="mensagem ok no-print mensagem-com-acao">
               <span>{mensagem}</span>
               {vendaImpressaoDireta && (
-                <button className="botao verde mini-print" onClick={abrirImpressaoFichas}>
+                <button className="botao verde mini-print" onClick={() => abrirImpressaoFichas(vendaImpressaoDireta)}>
                   <i className="ti ti-printer" /> Imprimir agora
                 </button>
               )}
@@ -3450,6 +3475,17 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .venda-card-itens { font-size: 11.5px; color: #5F5E5A; margin-top: 6px; line-height: 1.4; }
 .venda-card-sorteio { font-size: 11.5px; color: #06344F; font-weight: 700; margin-top: 6px; background: #EAF6FB; border: 1px solid #CDE8F3; border-radius: 8px; padding: 5px 8px; }
 .badge-sorteio { display: inline-block; font-size: 11px; font-weight: 700; color: #06344F; background: #EAF6FB; border: 1px solid #CDE8F3; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.pos-venda-overlay { position: fixed; inset: 0; background: rgba(6, 52, 79, .55); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 3000; }
+.pos-venda-card { background: #fff; border-radius: 20px; padding: 26px 22px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.35); animation: pos-venda-pop .18s ease-out; }
+@keyframes pos-venda-pop { from { transform: scale(.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.pos-venda-check { width: 60px; height: 60px; border-radius: 50%; background: #E8F7EC; color: #1E9E4A; display: flex; align-items: center; justify-content: center; font-size: 34px; margin: 0 auto 12px; }
+.pos-venda-card h2 { font-size: 19px; color: #06344F; margin: 0 0 4px; }
+.pos-venda-total { font-size: 15px; font-weight: 700; color: #0E7EA8; margin-bottom: 14px; }
+.pos-venda-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 20px; }
+.pos-venda-chip { font-size: 12.5px; font-weight: 600; color: #5F5E5A; background: #F3F2EE; border-radius: 999px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 5px; }
+.pos-venda-chip.sorteio { color: #06344F; background: #EAF6FB; border: 1px solid #CDE8F3; }
+.pos-venda-imprimir { width: 100%; font-size: 17px; padding: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.pos-venda-nova { width: 100%; margin-top: 10px; background: none; border: none; color: #7D7A72; font-size: 13.5px; padding: 8px; cursor: pointer; text-decoration: underline; }
 .venda-card-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
 
 @media (max-width: 1000px) {
