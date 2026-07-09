@@ -506,29 +506,28 @@ export default function App() {
     const GS = '\x1D';
     const nomeCaixa = paraTextoTermico(vendaRef?.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa');
     const numeroVenda = numero(vendaRef?.numero);
+    const tituloFicha = paraTextoTermico(evento?.nome || 'Evento');   // topo = nome do evento (editável)
+    const instituicao = paraTextoTermico(evento?.instituicao || '');
     const linha = '--------------------------------';
     let cmd = '';
     cmd += ESC + '@';                 // inicializa impressora
     cmd += ESC + 'a' + '\x01';        // centraliza tudo
-    cmd += '\n';
     cmd += `${linha}\n`;              // marca de início da ficha
-    cmd += '\n';
     cmd += GS + '!' + '\x00';         // tamanho normal
-    cmd += 'AGENDO EVENTOS\n';
-    cmd += '\n';
+    cmd += ESC + 'E' + '\x01';        // negrito on
+    cmd += `${tituloFicha}\n`;        // nome do evento
+    cmd += ESC + 'E' + '\x00';        // negrito off
+    if (instituicao) cmd += `${instituicao}\n`;
     cmd += GS + '!' + '\x11';         // dobro altura+largura
     cmd += ESC + 'E' + '\x01';        // negrito on
     cmd += `${paraTextoTermico(item.produto)}\n`.toUpperCase();
+    cmd += GS + '!' + '\x01';         // dobro altura só (valor)
+    cmd += `${paraTextoTermico(moeda(item.valor))}\n`;
     cmd += ESC + 'E' + '\x00';        // negrito off
     cmd += GS + '!' + '\x00';         // tamanho normal
-    cmd += '\n';
-    cmd += `${paraTextoTermico(moeda(item.valor))}\n`;
-    cmd += '\n';
-    cmd += `${paraTextoTermico(evento?.nome || 'Evento')}\n`;
-    cmd += `${nomeCaixa} - Venda no ${numeroVenda}\n`;
-    cmd += '\n';
+    cmd += `${nomeCaixa} - Venda ${numeroVenda}\n`;
     cmd += `${linha}\n`;              // marca de fim da ficha
-    cmd += '\n\n\n\n\n';              // espaço pra rasgar
+    cmd += '\n\n\n';                  // espaço pra rasgar (bem menor)
     cmd += GS + 'V' + '\x00';         // corta papel
     return cmd;
   }
@@ -562,27 +561,22 @@ export default function App() {
     let cmd = '';
     cmd += ESC + '@';                 // inicializa
     cmd += ESC + 'a' + '\x01';        // centraliza
-    cmd += '\n';
     cmd += `${linha}\n`;              // início do cupom
-    cmd += '\n';
     cmd += GS + '!' + '\x01';         // dobro de altura
     cmd += ESC + 'E' + '\x01';        // negrito
     cmd += 'CUPOM DE SORTEIO\n';
     cmd += ESC + 'E' + '\x00';
     cmd += GS + '!' + '\x00';         // tamanho normal
     cmd += 'Guarde para o sorteio!\n';
-    cmd += '\n';
     cmd += GS + '!' + '\x11';         // dobro altura+largura
     cmd += ESC + 'E' + '\x01';        // negrito
     numeros.forEach((n) => { cmd += `${ficha(n)}\n`; });
     cmd += ESC + 'E' + '\x00';
     cmd += GS + '!' + '\x00';
-    cmd += '\n';
     cmd += `${paraTextoTermico(evento?.nome || 'Evento')}\n`;
-    cmd += `${nomeCaixa} - Venda no ${numeroVenda}\n`;
-    cmd += '\n';
+    cmd += `${nomeCaixa} - Venda ${numeroVenda}\n`;
     cmd += `${linha}\n`;              // fim do cupom
-    cmd += '\n\n\n\n\n';              // espaço pra rasgar
+    cmd += '\n\n\n';                  // espaço pra rasgar (bem menor)
     cmd += GS + 'V' + '\x00';         // corta papel
     return cmd;
   }
@@ -1913,11 +1907,10 @@ export default function App() {
         {vendaParaImprimir && fichasParaImprimir.length > 0 ? (
           fichasParaImprimir.map((item) => (
             <div className="ficha-termica" key={`${vendaParaImprimir.id}-${item.numero}`}>
-              <div className="ficha-topo">AGENDO EVENTOS</div>
+              <div className="ficha-topo">{evento?.nome || 'Evento'}</div>
+              {evento?.instituicao && <div className="ficha-sub">{evento.instituicao}</div>}
               <h1>{item.produto}</h1>
               <h3>{moeda(item.valor)}</h3>
-              <div className="linha-pontilhada" />
-              <p>{evento?.nome || 'Evento'}</p>
               <p>{vendaParaImprimir.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa'} • Venda nº {numero(vendaParaImprimir.numero)}</p>
             </div>
           ))
@@ -3087,15 +3080,16 @@ tr:last-child td { border-bottom: none; }
 .relatorio-pdf-hidden .pdf-cancelada { color: #777; text-decoration: line-through; }
 
 .print-only { display: none; }
-.ficha-termica { width: 58mm; padding: 4mm 3mm; text-align: center; font-family: Arial, sans-serif; color: #000; page-break-after: always; }
-.ficha-topo { font-size: 8px; font-weight: 900; }
-.ficha-termica h2 { font-size: 14px; margin: 4px 0; color: #000; }
-.ficha-termica h1 { font-size: 22px; margin: 6px 0; text-transform: uppercase; color: #000; }
-.ficha-termica h3 { font-size: 13px; margin: 4px 0; color: #000; }
-.ficha-termica p { font-size: 8px; margin: 2px 0; color: #000; }
-.cupom-sorteio .ficha-topo { font-size: 11px; }
-.cupom-sorteio h1 { font-size: 30px; letter-spacing: 2px; margin: 4px 0; }
-.linha-pontilhada { border-top: 1px dashed #000; margin: 8px 0; }
+.ficha-termica { width: 58mm; padding: 1.5mm 3mm; text-align: center; font-family: Arial, sans-serif; color: #000; page-break-after: always; }
+.ficha-topo { font-size: 11px; font-weight: 900; }
+.ficha-sub { font-size: 8px; font-weight: 600; margin-bottom: 1px; }
+.ficha-termica h2 { font-size: 14px; margin: 2px 0; color: #000; }
+.ficha-termica h1 { font-size: 22px; margin: 2px 0; text-transform: uppercase; color: #000; line-height: 1.05; }
+.ficha-termica h3 { font-size: 15px; font-weight: 800; margin: 1px 0 2px; color: #000; }
+.ficha-termica p { font-size: 8px; margin: 1px 0; color: #000; }
+.cupom-sorteio .ficha-topo { font-size: 12px; }
+.cupom-sorteio h1 { font-size: 30px; letter-spacing: 2px; margin: 2px 0; }
+.linha-pontilhada { border-top: 1px dashed #000; margin: 4px 0; }
 
 
 
