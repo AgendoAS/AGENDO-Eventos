@@ -33,6 +33,7 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+#variable_conflict use_column
 declare
   v_evento uuid;
   v_total  numeric;
@@ -83,7 +84,7 @@ begin
     insert into public.sorteio_numeros (evento_id, venda_id, numero)
     select v_evento, p_venda_id, v_max + g
       from generate_series(1, v_qtd) as g
-    returning numero
+    returning sorteio_numeros.numero
   )
   select n.numero from novos n order by n.numero;
 end;
