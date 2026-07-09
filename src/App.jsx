@@ -170,7 +170,7 @@ export default function App() {
   async function carregarVendas(caixasBase = caixas) {
     const { data, error } = await supabase
       .from('vendas')
-      .select('*, caixa:caixas(id,nome,operador), itens:venda_itens(*)')
+      .select('*, caixa:caixas(id,nome,operador), itens:venda_itens(*), sorteio:sorteio_numeros(numero)')
       .eq('evento_id', EVENTO_ID)
       .order('criada_em', { ascending: false });
 
@@ -255,6 +255,7 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'produtos', filter: `evento_id=eq.${EVENTO_ID}` }, carregarTudo)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'caixas', filter: `evento_id=eq.${EVENTO_ID}` }, carregarTudo)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'movimentacoes_caixa', filter: `evento_id=eq.${EVENTO_ID}` }, carregarTudo)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sorteio_numeros', filter: `evento_id=eq.${EVENTO_ID}` }, carregarTudo)
       .subscribe();
 
     return () => supabase.removeChannel(canal);
@@ -394,6 +395,10 @@ export default function App() {
       }
     });
   }
+  const numerosSorteioImprimir = (vendaParaImprimir?.sorteio || [])
+    .map((s) => Number(s.numero))
+    .filter((n) => n > 0)
+    .sort((a, b) => a - b);
 
   function toggleColapsado() {
     setColapsado((v) => {
@@ -533,10 +538,54 @@ export default function App() {
     return itens;
   }
 
+  function numerosSorteioDaVenda(vendaRef) {
+    return (vendaRef?.sorteio || [])
+      .map((s) => Number(s.numero))
+      .filter((n) => n > 0)
+      .sort((a, b) => a - b);
+  }
+
+  function montarCupomSorteioEscPos(numeros, vendaRef) {
+    if (!numeros || !numeros.length) return '';
+    const ESC = '\x1B';
+    const GS = '\x1D';
+    const nomeCaixa = paraTextoTermico(vendaRef?.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa');
+    const numeroVenda = numero(vendaRef?.numero);
+    const linha = '--------------------------------';
+    let cmd = '';
+    cmd += ESC + '@';                 // inicializa
+    cmd += ESC + 'a' + '\x01';        // centraliza
+    cmd += '\n';
+    cmd += `${linha}\n`;              // início do cupom
+    cmd += '\n';
+    cmd += GS + '!' + '\x01';         // dobro de altura
+    cmd += ESC + 'E' + '\x01';        // negrito
+    cmd += 'CUPOM DE SORTEIO\n';
+    cmd += ESC + 'E' + '\x00';
+    cmd += GS + '!' + '\x00';         // tamanho normal
+    cmd += 'Guarde para o sorteio!\n';
+    cmd += '\n';
+    cmd += GS + '!' + '\x11';         // dobro altura+largura
+    cmd += ESC + 'E' + '\x01';        // negrito
+    numeros.forEach((n) => { cmd += `${ficha(n)}\n`; });
+    cmd += ESC + 'E' + '\x00';
+    cmd += GS + '!' + '\x00';
+    cmd += '\n';
+    cmd += `${paraTextoTermico(evento?.nome || 'Evento')}\n`;
+    cmd += `${nomeCaixa} - Venda no ${numeroVenda}\n`;
+    cmd += '\n';
+    cmd += `${linha}\n`;              // fim do cupom
+    cmd += '\n\n\n\n\n';              // espaço pra rasgar
+    cmd += GS + 'V' + '\x00';         // corta papel
+    return cmd;
+  }
+
   function imprimirViaRawBT(vendaRef) {
     const fichas = montarFichasDeVenda(vendaRef);
-    if (!fichas.length) return;
-    const payload = fichas.map((item) => montarFichaEscPos(item, vendaRef)).join('');
+    const numeros = numerosSorteioDaVenda(vendaRef);
+    if (!fichas.length && !numeros.length) return;
+    let payload = fichas.map((item) => montarFichaEscPos(item, vendaRef)).join('');
+    payload += montarCupomSorteioEscPos(numeros, vendaRef);
     const textEncoded = encodeURI(payload);
     const intentUrl = `intent:${textEncoded}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
     window.location.href = intentUrl;
@@ -555,6 +604,12 @@ export default function App() {
   }
 
   async function buscarVendaParaImpressao(vendaId) {
+    // Garante que os números do sorteio já foram emitidos (a cada R$10 = 1 número).
+    // É idempotente no servidor: chamar de novo numa reimpressão não gera número extra,
+    // só devolve os que já existem — então a reimpressão também "conserta" venda sem número.
+    try { await supabase.rpc('emitir_numeros_sorteio', { p_venda_id: vendaId }); }
+    catch { /* não bloqueia a impressão da venda */ }
+
     const { data, error } = await supabase
       .from('vendas')
       .select('*, caixa:caixas(id,nome,operador), itens:venda_itens(*)')
@@ -562,7 +617,18 @@ export default function App() {
       .maybeSingle();
 
     if (error) throw error;
-    return data;
+
+    let sorteio = [];
+    try {
+      const { data: numeros } = await supabase
+        .from('sorteio_numeros')
+        .select('numero')
+        .eq('venda_id', vendaId)
+        .order('numero', { ascending: true });
+      sorteio = numeros || [];
+    } catch { /* tabela pode não existir ainda; segue sem cupom de sorteio */ }
+
+    return { ...(data || {}), sorteio };
   }
 
   async function finalizarVendaPrincipal() {
@@ -1810,6 +1876,17 @@ export default function App() {
             </div>
           ))
         ) : <div />}
+        {vendaParaImprimir && numerosSorteioImprimir.length > 0 && (
+          <div className="ficha-termica cupom-sorteio" key={`${vendaParaImprimir.id}-sorteio`}>
+            <div className="ficha-topo">CUPOM DE SORTEIO</div>
+            <h3>Guarde para o sorteio!</h3>
+            <div className="linha-pontilhada" />
+            {numerosSorteioImprimir.map((n) => <h1 key={n}>{ficha(n)}</h1>)}
+            <div className="linha-pontilhada" />
+            <p>{evento?.nome || 'Evento'}</p>
+            <p>{vendaParaImprimir.caixa?.nome || caixaAtual?.nome || caixaPrincipal?.nome || 'Caixa'} • Venda nº {numero(vendaParaImprimir.numero)}</p>
+          </div>
+        )}
       </div>
       <RelatorioPdf
         evento={evento}
@@ -2075,6 +2152,9 @@ function TabelaVendas({ vendas, marcarImpressa, imprimirVenda, cancelarVenda, ca
             <div className="venda-card-itens">
               {(v.itens || []).map((i) => `${i.quantidade}× ${i.nome_produto} (${moeda(i.preco_unitario)})`).join(' · ')}
             </div>
+            {(v.sorteio || []).length > 0 && (
+              <div className="venda-card-sorteio">🎟️ Sorteio: {(v.sorteio || []).map((s) => ficha(s.numero)).join(', ')}</div>
+            )}
             <div className="venda-card-acoes">
               <button className="mini" onClick={() => imprimirVenda(v.id)}>Reimprimir</button>
               {v.forma_pagamento === 'Fiado' && v.status !== 'cancelada' && <button className="mini verde" onClick={() => marcarFiadoRecebido(v)}>Marcar recebido</button>}
@@ -2089,7 +2169,7 @@ function TabelaVendas({ vendas, marcarImpressa, imprimirVenda, cancelarVenda, ca
   return (
     <div className="tabela-scroll">
       <table>
-        <thead><tr><th>Venda</th><th>Horário</th><th>Caixa</th><th>Pagamento</th><th>Itens</th><th>Total</th><th>Status</th><th>Impressão</th></tr></thead>
+        <thead><tr><th>Venda</th><th>Horário</th><th>Caixa</th><th>Pagamento</th><th>Itens</th><th>Total</th><th>Sorteio</th><th>Status</th><th>Impressão</th></tr></thead>
         <tbody>
           {vendas.map((v) => (
             <tr key={v.id} className={v.status === 'cancelada' ? 'cancelada' : ''}>
@@ -2099,6 +2179,7 @@ function TabelaVendas({ vendas, marcarImpressa, imprimirVenda, cancelarVenda, ca
               <td>{v.forma_pagamento}</td>
               <td>{(v.itens || []).map((i) => `${i.quantidade}× ${i.nome_produto} • fichas ${numero(i.ficha_inicio)}-${numero(i.ficha_fim)}`).join(' | ')}</td>
               <td>{moeda(v.total)}</td>
+              <td>{(v.sorteio || []).length ? <span className="badge-sorteio">🎟️ {v.sorteio.map((s) => ficha(s.numero)).join(', ')}</span> : '—'}</td>
               <td><span className={v.status === 'cancelada' ? 'pill erro' : 'pill ok'}>{v.status}</span></td>
               <td><div className="acoes-linha"><button className="mini" onClick={() => imprimirVenda(v.id)}>Reimprimir</button>{v.impresso ? <span className="pill ok">Impresso</span> : <button className="mini" onClick={() => marcarImpressa(v)}>Marcar impresso</button>}{v.forma_pagamento === 'Fiado' && v.status !== 'cancelada' && <button className="mini verde" onClick={() => marcarFiadoRecebido(v)}>Marcar recebido</button>}{permitirCancelar && v.status !== 'cancelada' && <button className="mini perigo" disabled={caixaFechado} onClick={() => cancelarVenda(v)}>Cancelar</button>}</div></td>
             </tr>
@@ -2966,6 +3047,8 @@ tr:last-child td { border-bottom: none; }
 .ficha-termica h1 { font-size: 22px; margin: 6px 0; text-transform: uppercase; color: #000; }
 .ficha-termica h3 { font-size: 13px; margin: 4px 0; color: #000; }
 .ficha-termica p { font-size: 8px; margin: 2px 0; color: #000; }
+.cupom-sorteio .ficha-topo { font-size: 11px; }
+.cupom-sorteio h1 { font-size: 30px; letter-spacing: 2px; margin: 4px 0; }
 .linha-pontilhada { border-top: 1px dashed #000; margin: 8px 0; }
 
 
@@ -3344,6 +3427,8 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .venda-card-valor { font-size: 16px; font-weight: 800; color: #0E7EA8; }
 .venda-card-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11px; color: #7D7A72; margin-top: 4px; }
 .venda-card-itens { font-size: 11.5px; color: #5F5E5A; margin-top: 6px; line-height: 1.4; }
+.venda-card-sorteio { font-size: 11.5px; color: #06344F; font-weight: 700; margin-top: 6px; background: #EAF6FB; border: 1px solid #CDE8F3; border-radius: 8px; padding: 5px 8px; }
+.badge-sorteio { display: inline-block; font-size: 11px; font-weight: 700; color: #06344F; background: #EAF6FB; border: 1px solid #CDE8F3; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
 .venda-card-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
 
 @media (max-width: 1000px) {
