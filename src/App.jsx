@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { EVENTO_ID, supabase } from './lib/supabaseClient';
+import { EVENTO_ID, supabase, capette } from './lib/supabaseClient';
 
 const BluetoothPrinter = registerPlugin('BluetoothPrinter');
 const APP_NATIVO = Capacitor.isNativePlatform();
@@ -135,6 +135,8 @@ export default function App() {
   const [impressoraBt, setImpressoraBt] = useState(() => localStorage.getItem('agendo_eventos_impressora_bt') || '');
   const [impressoraBtNome, setImpressoraBtNome] = useState(() => localStorage.getItem('agendo_eventos_impressora_bt_nome') || '');
   const [impressorasBt, setImpressorasBt] = useState([]);
+  const [capetteEventos, setCapetteEventos] = useState([]);
+  const [capetteEventoId, setCapetteEventoId] = useState(() => localStorage.getItem('agendo_eventos_capette_evento_id') || '');
   const [eventoForm, setEventoForm] = useState({ nome: '', instituicao: '', local_evento: '', data_evento: '', sorteio_valor_por_numero: '' });
   const [novoCaixa, setNovoCaixa] = useState({ nome: '', operador: '', tipo: 'secundario' });
 
@@ -448,6 +450,13 @@ export default function App() {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
+  }, []);
+
+  // Lista os eventos do CAPETTE (só leitura) pro seletor de exportação.
+  useEffect(() => {
+    capette.rpc('listar_eventos_para_agendo')
+      .then(({ data }) => { if (Array.isArray(data)) setCapetteEventos(data); })
+      .catch(() => { /* CAPETTE indisponível: segue com o id salvo/padrão */ });
   }, []);
 
   useEffect(() => {
@@ -986,7 +995,7 @@ export default function App() {
   }
 
   function exportarCapette() {
-    const EVENTO_CAPETTE_ID = 1;            // FESTA JULINA 2026 (tabela eventos do CAPETTE)
+    const EVENTO_CAPETTE_ID = Number(capetteEventoId) || 1;   // evento escolhido no seletor (padrão 1)
     const CATEGORIA_ID = 69;                // Eventos e Campanhas (entrada)
     const SUBCATEGORIA_ID = 71;             // Venda de alimentos e bebidas
     const CONTA_CARTAO_PIX = 1;             // Conta Principal
@@ -2037,6 +2046,14 @@ export default function App() {
                     <button className="botao" onClick={exportarCsv}>Exportar CSV</button>
                     <button className="botao verde" onClick={exportarCapette}><i className="ti ti-building-bank" /> Exportar p/ CAPETTE</button>
                   </div>
+                </div>
+                <div className="capette-seletor">
+                  <label className="label">Exportar para qual evento do CAPETTE?</label>
+                  <select value={capetteEventoId} onChange={(e) => { setCapetteEventoId(e.target.value); localStorage.setItem('agendo_eventos_capette_evento_id', e.target.value); }}>
+                    <option value="">— Padrão: FESTA JULINA 2026 (id 1) —</option>
+                    {capetteEventos.map((ev) => <option key={ev.id} value={ev.id}>{ev.nome} (id {ev.id})</option>)}
+                  </select>
+                  <small className="capette-hint">{capetteEventos.length ? 'A exportação "p/ CAPETTE" vai lançar as vendas neste evento.' : 'Não consegui listar os eventos do CAPETTE agora — vai usar o padrão (id 1). Rode o SQL do CAPETTE (abaixo) pra habilitar a lista.'}</small>
                 </div>
               </div>
               <Relatorio evento={evento} vendas={vendas} resumo={resumo} produtos={produtos} caixas={caixas} />
@@ -3632,6 +3649,9 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .rawbt-passos { font-size: 13px; color: #5F5E5A; margin: 10px 0; background: #F7F6F1; border: 1px solid #E7E5DC; border-radius: 10px; padding: 12px 14px; }
 .rawbt-passos ol { margin: 6px 0 0; padding-left: 20px; line-height: 1.7; }
 .card-perigo { border: 1px solid #E6C0BA; background: #FDF6F5; }
+.capette-seletor { margin-top: 12px; }
+.capette-seletor select { width: 100%; max-width: 420px; margin: 4px 0; padding: 8px 10px; border: 0.5px solid #D3D1C7; border-radius: 8px; font-size: 13px; }
+.capette-hint { display: block; font-size: 12px; color: #7D7A72; }
 .venda-card-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
 
 @media (max-width: 1000px) {
