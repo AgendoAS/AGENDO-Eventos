@@ -1179,6 +1179,25 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  const [zerando, setZerando] = useState(false);
+  async function zerarDadosTeste() {
+    const resp = prompt('Isto APAGA todas as vendas, movimentações e números de sorteio deste evento (produtos e caixas continuam). Use só antes da festa começar.\n\nDigite ZERAR para confirmar:');
+    if (resp === null) return;
+    if (resp.trim().toUpperCase() !== 'ZERAR') return aviso('Cancelado — nada foi apagado.');
+    try {
+      setZerando(true);
+      setErro('');
+      const { error } = await supabase.rpc('zerar_dados_teste_evento', { p_evento_id: EVENTO_ID });
+      if (error) throw error;
+      aviso('Tudo zerado! Pode começar a festa do zero — o sorteio recomeça no nº 1.');
+      await carregarTudo();
+    } catch (e) {
+      setErro(`Não consegui zerar: ${e.message || e}. (Rodou o SQL "2026-zerar-botao.sql" no Supabase?)`);
+    } finally {
+      setZerando(false);
+    }
+  }
+
   const menuPrincipalSecoes = [
     { titulo: 'Principal', itens: [['painel', 'Painel geral']] },
     { titulo: 'Operação diária', itens: [['vender', 'Vender fichas'], ['produtos', 'Produtos e estoque'], ['vendas', 'Vendas realizadas']] },
@@ -1934,6 +1953,15 @@ export default function App() {
                 <h2>Configurações do sistema</h2>
                 <p>Parâmetros gerais do AGENDO Eventos. O acesso é escolhido na tela inicial para manter a operação limpa.</p>
                 <div className="nota-config">Banco online ativo. Os dados deste evento são sincronizados entre todos os caixas pelo Supabase.</div>
+              </div>
+
+              <div className="card card-perigo">
+                <h2><i className="ti ti-alert-triangle" /> Zerar dados de teste</h2>
+                <p>Apaga <strong>todas as vendas, movimentações e números de sorteio</strong> deste evento e zera o estoque. <strong>Mantém</strong> produtos e caixas. Use pra limpar os testes <strong>logo antes da festa começar</strong> — depois disso o sorteio recomeça no nº 1.</p>
+                <div className="nota-config">⚠️ Não tem volta. Vai pedir pra você digitar <b>ZERAR</b> pra confirmar.</div>
+                <button className="botao perigo" disabled={zerando} onClick={zerarDadosTeste}>
+                  <i className="ti ti-trash" /> {zerando ? 'Zerando...' : 'Zerar dados de teste'}
+                </button>
               </div>
             </section>
           )}
@@ -3603,6 +3631,7 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .pos-venda-nova { width: 100%; margin-top: 10px; background: none; border: none; color: #7D7A72; font-size: 13.5px; padding: 8px; cursor: pointer; text-decoration: underline; }
 .rawbt-passos { font-size: 13px; color: #5F5E5A; margin: 10px 0; background: #F7F6F1; border: 1px solid #E7E5DC; border-radius: 10px; padding: 12px 14px; }
 .rawbt-passos ol { margin: 6px 0 0; padding-left: 20px; line-height: 1.7; }
+.card-perigo { border: 1px solid #E6C0BA; background: #FDF6F5; }
 .venda-card-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
 
 @media (max-width: 1000px) {
