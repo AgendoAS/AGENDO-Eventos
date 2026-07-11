@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { EVENTO_ID, supabase, capette } from './lib/supabaseClient';
+import { EVENTO_ID, supabase } from './lib/supabaseClient';
 
 const BluetoothPrinter = registerPlugin('BluetoothPrinter');
 const APP_NATIVO = Capacitor.isNativePlatform();
@@ -135,8 +135,6 @@ export default function App() {
   const [impressoraBt, setImpressoraBt] = useState(() => localStorage.getItem('agendo_eventos_impressora_bt') || '');
   const [impressoraBtNome, setImpressoraBtNome] = useState(() => localStorage.getItem('agendo_eventos_impressora_bt_nome') || '');
   const [impressorasBt, setImpressorasBt] = useState([]);
-  const [capetteEventos, setCapetteEventos] = useState([]);
-  const [capetteEventoId, setCapetteEventoId] = useState(() => localStorage.getItem('agendo_eventos_capette_evento_id') || '');
   const [eventoForm, setEventoForm] = useState({ nome: '', instituicao: '', local_evento: '', data_evento: '', sorteio_valor_por_numero: '' });
   const [novoCaixa, setNovoCaixa] = useState({ nome: '', operador: '', tipo: 'secundario' });
 
@@ -450,13 +448,6 @@ export default function App() {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  }, []);
-
-  // Lista os eventos do CAPETTE (só leitura) pro seletor de exportação.
-  useEffect(() => {
-    capette.rpc('listar_eventos_para_agendo')
-      .then(({ data }) => { if (Array.isArray(data)) setCapetteEventos(data); })
-      .catch(() => { /* CAPETTE indisponível: segue com o id salvo/padrão */ });
   }, []);
 
   useEffect(() => {
@@ -995,7 +986,7 @@ export default function App() {
   }
 
   function exportarCapette() {
-    const EVENTO_CAPETTE_ID = Number(capetteEventoId) || 1;   // evento escolhido no seletor (padrão 1)
+    const EVENTO_CAPETTE_ID = 1;            // legado (migração agora é feita no CAPETTE)
     const CATEGORIA_ID = 69;                // Eventos e Campanhas (entrada)
     const SUBCATEGORIA_ID = 71;             // Venda de alimentos e bebidas
     const CONTA_CARTAO_PIX = 1;             // Conta Principal
@@ -2044,16 +2035,17 @@ export default function App() {
                   <div className="acoes">
                     <button className="botao" onClick={imprimirRelatorio}>Gerar PDF</button>
                     <button className="botao" onClick={exportarCsv}>Exportar CSV</button>
-                    <button className="botao verde" onClick={exportarCapette}><i className="ti ti-building-bank" /> Exportar p/ CAPETTE</button>
                   </div>
                 </div>
                 <div className="capette-seletor">
-                  <label className="label">Exportar para qual evento do CAPETTE?</label>
-                  <select value={capetteEventoId} onChange={(e) => { setCapetteEventoId(e.target.value); localStorage.setItem('agendo_eventos_capette_evento_id', e.target.value); }}>
-                    <option value="">— Padrão: FESTA JULINA 2026 (id 1) —</option>
-                    {capetteEventos.map((ev) => <option key={ev.id} value={ev.id}>{ev.nome} (id {ev.id})</option>)}
-                  </select>
-                  <small className="capette-hint">{capetteEventos.length ? 'A exportação "p/ CAPETTE" vai lançar as vendas neste evento.' : 'Não consegui listar os eventos do CAPETTE agora — vai usar o padrão (id 1). Rode o SQL do CAPETTE (abaixo) pra habilitar a lista.'}</small>
+                  <label className="label">Migração para o CAPETTE</label>
+                  <div style={{ fontSize: 13, color: '#5F5E5A', lineHeight: 1.5 }}>
+                    A migração é feita <b>no CAPETTE</b>: lá você cadastra o evento, cola o ID abaixo no campo de vínculo e clica <b>“Importar vendas do AGENDO”</b>. Aqui é só copiar o ID desta festa:
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                    <code style={{ fontSize: 12, background: '#F3F2EE', padding: '7px 10px', borderRadius: 6, userSelect: 'all' }}>{EVENTO_ID}</code>
+                    <button className="botao" onClick={() => { try { navigator.clipboard?.writeText(EVENTO_ID); aviso('ID copiado!'); } catch { aviso('Copie o código ao lado.'); } }}><i className="ti ti-copy" /> Copiar ID</button>
+                  </div>
                 </div>
               </div>
               <Relatorio evento={evento} vendas={vendas} resumo={resumo} produtos={produtos} caixas={caixas} />
