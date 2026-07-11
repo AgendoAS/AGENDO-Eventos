@@ -764,11 +764,8 @@ export default function App() {
         setVendaImpressaoDireta(vendaCompleta);
         setVendaImpressaoId(vendaId);
         setVendaConcluida(vendaCompleta);
-        // Auto-print: no PC (kiosk) sai silencioso e na Bluetooth NATIVA (APK) imprime
-        // sozinho. Só NÃO dispara automático no RawBT — o Android bloqueia print sem
-        // toque, então lá usa o botão "Imprimir fichas" do modal (gesto do usuário).
-        const rawbtPrecisaToque = !(APP_NATIVO && impressoraBt) && ehAndroid() && impressaoRawBT;
-        if (!rawbtPrecisaToque) abrirImpressaoFichas(vendaCompleta);
+        // SEM print automático: a impressão sai pelo botão "Imprimir fichas" do modal
+        // (um toque). Evita disparos automáticos repetidos que bagunçavam a impressora.
       }
 
       const qtdSorteio = (vendaCompleta?.sorteio || []).length;
