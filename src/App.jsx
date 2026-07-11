@@ -556,7 +556,7 @@ export default function App() {
     cmd += `${tituloFicha}\n`;        // nome do evento
     cmd += ESC + 'E' + '\x00';        // negrito off
     if (instituicao) cmd += `${instituicao}\n`;
-    cmd += GS + '!' + '\x01';         // dobro altura só (produto) — cabe e centraliza
+    cmd += GS + '!' + '\x11';         // dobro altura+largura
     cmd += ESC + 'E' + '\x01';        // negrito on
     cmd += `${paraTextoTermico(item.produto)}\n`.toUpperCase();
     cmd += GS + '!' + '\x01';         // dobro altura só (valor)
@@ -566,7 +566,7 @@ export default function App() {
     cmd += `${nomeCaixa} - Venda ${numeroVenda}\n`;
     cmd += 'AGENDO EVENTOS\n';        // marca (rodape)
     cmd += `${linha}\n`;              // marca de fim da ficha
-    cmd += '\n\n';                    // espaço pra rasgar
+    cmd += '\n\n\n';                  // espaço pra rasgar (bem menor)
     cmd += GS + 'V' + '\x00';         // corta papel
     return cmd;
   }
@@ -616,7 +616,7 @@ export default function App() {
     cmd += `${nomeCaixa} - Venda ${numeroVenda}\n`;
     cmd += 'AGENDO EVENTOS\n';        // marca (rodape)
     cmd += `${linha}\n`;              // fim do cupom
-    cmd += '\n\n';                    // espaço pra rasgar
+    cmd += '\n\n\n';                  // espaço pra rasgar (bem menor)
     cmd += GS + 'V' + '\x00';         // corta papel
     return cmd;
   }
@@ -694,12 +694,14 @@ export default function App() {
 
   function abrirImpressaoFichas(vendaRef) {
     const ref = vendaRef || vendaParaImprimir;
-    if (APP_NATIVO && impressoraBt) {
-      imprimirNativo(ref);
-      return;
-    }
+    // RawBT tem prioridade: é o caminho estável/testado. A Bluetooth nativa só
+    // entra se o RawBT estiver DESLIGADO neste aparelho.
     if (ehAndroid() && impressaoRawBT) {
       imprimirViaRawBT(ref);
+      return;
+    }
+    if (APP_NATIVO && impressoraBt) {
+      imprimirNativo(ref);
       return;
     }
     document.body.classList.remove('imprimindo-relatorio');
@@ -763,9 +765,10 @@ export default function App() {
         vendaCompleta = await buscarVendaParaImpressao(vendaId);
         setVendaImpressaoDireta(vendaCompleta);
         setVendaImpressaoId(vendaId);
+        // Não imprime automático: abre a confirmação com o botão "Imprimir".
+        // O toque no botão é um gesto do usuário, então o navegador do celular
+        // libera a impressão (o print automático depois do await era bloqueado).
         setVendaConcluida(vendaCompleta);
-        // SEM print automático: a impressão sai pelo botão "Imprimir fichas" do modal
-        // (um toque). Evita disparos automáticos repetidos que bagunçavam a impressora.
       }
 
       const qtdSorteio = (vendaCompleta?.sorteio || []).length;
@@ -3345,14 +3348,14 @@ tr:last-child td { border-bottom: none; }
 .relatorio-pdf-hidden .pdf-cancelada { color: #777; text-decoration: line-through; }
 
 .print-only { display: none; }
-.ficha-termica { width: 58mm; padding: 2mm 3mm; text-align: center; font-family: Arial, sans-serif; color: #000; page-break-after: always; }
+.ficha-termica { width: 58mm; padding: 1.5mm 3mm; text-align: center; font-family: Arial, sans-serif; color: #000; page-break-after: always; }
 .ficha-topo { font-size: 11px; font-weight: 900; }
-.ficha-sub { font-size: 9px; font-weight: 600; margin-bottom: 4px; }
+.ficha-sub { font-size: 8px; font-weight: 600; margin-bottom: 1px; }
 .ficha-termica h2 { font-size: 14px; margin: 2px 0; color: #000; }
-.ficha-termica h1 { font-size: 24px; margin: 4px 0; text-transform: uppercase; color: #000; line-height: 1.08; word-break: break-word; }
-.ficha-termica h3 { font-size: 16px; font-weight: 800; margin: 3px 0 4px; color: #000; }
-.ficha-termica p { font-size: 9px; margin: 1px 0; color: #000; }
-.ficha-marca { font-size: 9px; font-weight: 900; letter-spacing: 1px; margin-top: 4px; }
+.ficha-termica h1 { font-size: 22px; margin: 2px 0; text-transform: uppercase; color: #000; line-height: 1.05; }
+.ficha-termica h3 { font-size: 15px; font-weight: 800; margin: 1px 0 2px; color: #000; }
+.ficha-termica p { font-size: 8px; margin: 1px 0; color: #000; }
+.ficha-marca { font-size: 8px; font-weight: 900; letter-spacing: 1px; margin-top: 2px; }
 .cupom-sorteio .ficha-topo { font-size: 12px; }
 .cupom-sorteio h1 { font-size: 30px; letter-spacing: 2px; margin: 2px 0; }
 .linha-pontilhada { border-top: 1px dashed #000; margin: 4px 0; }
