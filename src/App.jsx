@@ -83,6 +83,8 @@ const MENU_ICONS = {
   backup: 'database-export',
   config: 'settings',
   'minhas-vendas': 'receipt-2',
+  caixasfin: 'cash-register',
+  'meu-caixa': 'wallet',
 };
 
 export default function App() {
@@ -1099,6 +1101,58 @@ export default function App() {
     carregarTudo();
   }
 
+  // Resumo de dinheiro de um caixa (pra abertura/fechamento).
+  function financeiroCaixa(caixa) {
+    const cid = caixa?.id;
+    const vendasDin = vendas
+      .filter((v) => v.caixa_id === cid && v.status !== 'cancelada' && v.forma_pagamento === 'Dinheiro')
+      .reduce((s, v) => s + Number(v.total || 0), 0);
+    const reforcos = movimentacoes.filter((m) => m.caixa_id === cid && m.tipo === 'Reforço').reduce((s, m) => s + Number(m.valor || 0), 0);
+    const sangrias = movimentacoes.filter((m) => m.caixa_id === cid && m.tipo === 'Sangria').reduce((s, m) => s + Number(m.valor || 0), 0);
+    const fundo = Number(caixa?.fundo_troco || 0);
+    const esperado = fundo + vendasDin + reforcos - sangrias;
+    const contado = caixa?.valor_contado != null ? Number(caixa.valor_contado) : null;
+    return {
+      fundo, vendasDin, reforcos, sangrias, esperado, contado,
+      diferenca: contado != null ? contado - esperado : null,
+      aberto: !!caixa?.aberto_em && !caixa?.fechado_em,
+      fechado: !!caixa?.fechado_em,
+    };
+  }
+
+  async function abrirCaixaSessao(caixa, fundoStr) {
+    const fundo = normalizarNumero(fundoStr);
+    const { data, error } = await supabase.from('caixas')
+      .update({ fundo_troco: fundo, aberto_em: new Date().toISOString(), valor_contado: null, fechado_em: null })
+      .eq('id', caixa.id).select();
+    if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Não foi possível abrir o caixa (rodou o SQL da abertura/fechamento?).');
+    aviso(`${caixa.nome} aberto com fundo de ${moeda(fundo)}.`);
+    carregarTudo();
+  }
+
+  async function fecharCaixaSessao(caixa, contadoStr) {
+    const contado = normalizarNumero(contadoStr);
+    const { data, error } = await supabase.from('caixas')
+      .update({ valor_contado: contado, fechado_em: new Date().toISOString() })
+      .eq('id', caixa.id).select();
+    if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Não foi possível fechar o caixa.');
+    aviso(`${caixa.nome} fechado.`);
+    carregarTudo();
+  }
+
+  async function reabrirCaixaSessao(caixa) {
+    if (!confirm(`Reabrir o ${caixa.nome} pra corrigir? Volta pro estado "aberto".`)) return;
+    const { data, error } = await supabase.from('caixas')
+      .update({ fechado_em: null, valor_contado: null })
+      .eq('id', caixa.id).select();
+    if (error) return setErro(error.message);
+    if (!data || !data.length) return setErro('Não foi possível reabrir.');
+    aviso(`${caixa.nome} reaberto.`);
+    carregarTudo();
+  }
+
   function exportarBackupJson() {
     const payload = {
       gerado_em: new Date().toISOString(),
@@ -1138,15 +1192,15 @@ export default function App() {
   }
 
   const menuPrincipalSecoes = [
-    { titulo: 'Principal', itens: [['painel', 'Painel geral']] },
-    { titulo: 'Operação diária', itens: [['vender', 'Vender fichas'], ['produtos', 'Produtos e estoque'], ['vendas', 'Vendas realizadas']] },
-    { titulo: 'Gestão do evento', itens: [['fechamento', 'Fechamento'], ['movimentacoes', 'Sangria / reforço'], ['dados', 'Dados do evento'], ['caixas', 'Caixas e operadores'], ['fiado', 'Pessoas do fiado']] },
-    { titulo: 'Relatórios', itens: [['relatorios', 'Relatórios']] },
-    { titulo: 'Configurações', itens: [['impressora', 'Config. impressora'], ['backup', 'Backup / exportação'], ['config', 'Configurações']] },
+    { titulo: 'Início', itens: [['painel', 'Painel geral']] },
+    { titulo: 'Operação', itens: [['vender', 'Vender fichas'], ['vendas', 'Vendas realizadas'], ['produtos', 'Produtos e estoque']] },
+    { titulo: 'Financeiro', itens: [['caixasfin', 'Abertura/fechamento de caixa'], ['fechamento', 'Fechamento do evento'], ['movimentacoes', 'Sangria / reforço'], ['fiado', 'Fiado (a receber)']] },
+    { titulo: 'Relatórios', itens: [['relatorios', 'Relatórios e exportações']] },
+    { titulo: 'Configurações', itens: [['dados', 'Dados do evento'], ['impressora', 'Impressora'], ['caixas', 'Caixas e operadores'], ['config', 'Sistema']] },
   ];
   const menuCaixaSecoes = [
-    { titulo: 'Operação', itens: [['vender', 'Vender fichas'], ['minhas-vendas', 'Vendas']] },
-    { titulo: 'Configurações', itens: [['impressora', 'Config. impressão']] },
+    { titulo: 'Operação', itens: [['vender', 'Vender fichas'], ['minhas-vendas', 'Minhas vendas'], ['meu-caixa', 'Meu caixa']] },
+    { titulo: 'Configurações', itens: [['impressora', 'Impressora']] },
   ];
   const menuSecoes = modoAcesso === 'principal' ? menuPrincipalSecoes : menuCaixaSecoes;
   const menu = menuSecoes.flatMap((sec) => sec.itens);
@@ -1918,6 +1972,39 @@ export default function App() {
             </section>
           )}
 
+          {pagina === 'meu-caixa' && (
+            <section className="stack">
+              <CardCaixaSessao
+                caixa={caixaAtual}
+                fin={financeiroCaixa(caixaAtual)}
+                onAbrir={abrirCaixaSessao}
+                onFechar={fecharCaixaSessao}
+                onReabrir={reabrirCaixaSessao}
+              />
+            </section>
+          )}
+
+          {pagina === 'caixasfin' && (
+            <section className="stack">
+              <div className="card no-print">
+                <h2>Abertura e fechamento de caixa</h2>
+                <p>Cada operador abre o próprio caixa com o fundo de troco e fecha contando o dinheiro. Aqui você acompanha todos.</p>
+              </div>
+              {caixasAtivos.length === 0 ? (
+                <p className="vazio">Nenhum caixa cadastrado.</p>
+              ) : caixasAtivos.map((c) => (
+                <CardCaixaSessao
+                  key={c.id}
+                  caixa={c}
+                  fin={financeiroCaixa(c)}
+                  onAbrir={abrirCaixaSessao}
+                  onFechar={fecharCaixaSessao}
+                  onReabrir={reabrirCaixaSessao}
+                />
+              ))}
+            </section>
+          )}
+
           {pagina === 'fechamento' && (
             <section className="stack">
               <div className="card fechamento-topo">
@@ -1974,6 +2061,7 @@ export default function App() {
                   <div className="acoes">
                     <button className="botao" onClick={imprimirRelatorio}>Gerar PDF</button>
                     <button className="botao" onClick={exportarCsv}>Exportar CSV</button>
+                    <button className="botao" onClick={exportarBackupJson}>Backup (JSON)</button>
                   </div>
                 </div>
                 <div className="capette-seletor">
@@ -2236,22 +2324,83 @@ function TelaAcesso({ evento, caixas, entrarComoPrincipal, entrarComoCaixa, usua
   );
 }
 
+function CardCaixaSessao({ caixa, fin, onAbrir, onFechar, onReabrir }) {
+  const [fundo, setFundo] = useState('');
+  const [contado, setContado] = useState('');
+  if (!caixa) return <p className="vazio">Nenhum caixa selecionado.</p>;
+
+  const linha = (rot, val, forte) => (
+    <div className={`sessao-linha ${forte ? 'forte' : ''}`}><span>{rot}</span><strong>{moeda(val)}</strong></div>
+  );
+  const blocoDif = (dif) => (
+    <div className={`sessao-dif ${dif < 0 ? 'falta' : 'ok'}`}>
+      <span>{dif < 0 ? 'Faltou' : dif > 0 ? 'Sobrou' : 'Bateu certinho'}</span>
+      <strong>{dif < 0 ? '− ' : dif > 0 ? '+ ' : ''}{moeda(Math.abs(dif || 0))}</strong>
+    </div>
+  );
+
+  if (!fin.aberto && !fin.fechado) {
+    return (
+      <div className="card">
+        <div className="cabecalho-card"><div><h2>{caixa.nome}</h2><p>Caixa fechado — abra informando o fundo de troco pra começar.</p></div><span className="pill">Fechado</span></div>
+        <label className="label">Fundo de troco (R$)</label>
+        <input inputMode="decimal" value={fundo} onChange={(e) => setFundo(e.target.value)} placeholder="Ex.: 100" />
+        <div className="botoes-finalizar"><button className="botao verde" disabled={fundo === ''} onClick={() => onAbrir(caixa, fundo)}><i className="ti ti-lock-open" /> Abrir caixa</button></div>
+      </div>
+    );
+  }
+
+  if (fin.aberto) {
+    const difPrevia = contado !== '' ? normalizarNumero(contado) - fin.esperado : null;
+    return (
+      <div className="card">
+        <div className="cabecalho-card"><div><h2>{caixa.nome}</h2><p>Caixa aberto. No fim, conte o dinheiro da gaveta e feche.</p></div><span className="pill ok">Aberto</span></div>
+        <div className="sessao-resumo">
+          {linha('Fundo de troco', fin.fundo)}
+          {linha('Vendas em dinheiro', fin.vendasDin)}
+          {linha('Reforços', fin.reforcos)}
+          {linha('Sangrias', -fin.sangrias)}
+          {linha('Esperado na gaveta', fin.esperado, true)}
+        </div>
+        <label className="label">Quanto você contou em dinheiro? (R$)</label>
+        <input inputMode="decimal" value={contado} onChange={(e) => setContado(e.target.value)} placeholder="Ex.: 500" />
+        {difPrevia != null && blocoDif(difPrevia)}
+        <div className="botoes-finalizar"><button className="botao verde" disabled={contado === ''} onClick={() => onFechar(caixa, contado)}><i className="ti ti-lock" /> Fechar caixa</button></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="cabecalho-card"><div><h2>{caixa.nome}</h2><p>Caixa fechado e conferido.</p></div><span className="pill ok">Fechado ✓</span></div>
+      <div className="sessao-resumo">
+        {linha('Esperado', fin.esperado)}
+        {linha('Contado', fin.contado)}
+      </div>
+      {blocoDif(fin.diferenca)}
+      <div className="botoes-finalizar"><button className="botao" onClick={() => onReabrir(caixa)}><i className="ti ti-lock-open" /> Reabrir (corrigir)</button></div>
+    </div>
+  );
+}
+
 function tituloPagina(pagina) {
   return {
     painel: 'Painel geral',
     vender: 'Vender fichas',
     produtos: 'Produtos e estoque',
     vendas: 'Vendas realizadas',
-    'minhas-vendas': 'Vendas',
-    fechamento: 'Fechamento',
-    movimentacoes: 'Sangria/reforço',
-    relatorios: 'Relatórios',
+    'minhas-vendas': 'Minhas vendas',
+    'meu-caixa': 'Meu caixa',
+    caixasfin: 'Abertura e fechamento de caixa',
+    fechamento: 'Fechamento do evento',
+    movimentacoes: 'Sangria / reforço',
+    relatorios: 'Relatórios e exportações',
     dados: 'Dados do evento',
-    impressora: 'Configuração da impressora',
-    caixas: 'Caixas / operadores',
-    fiado: 'Pessoas do fiado',
+    impressora: 'Impressora',
+    caixas: 'Caixas e operadores',
+    fiado: 'Fiado (a receber)',
     backup: 'Backup / exportação',
-    config: 'Configurações',
+    config: 'Sistema',
     acesso: 'Trocar acesso',
   }[pagina] || 'AGENDO Eventos';
 }
@@ -3579,6 +3728,16 @@ nav button { gap: 9px; padding: 9px 1.1rem; font-size: 12.5px; }
 .rawbt-passos { font-size: 13px; color: #5F5E5A; margin: 10px 0; background: #F7F6F1; border: 1px solid #E7E5DC; border-radius: 10px; padding: 12px 14px; }
 .rawbt-passos ol { margin: 6px 0 0; padding-left: 20px; line-height: 1.7; }
 .card-perigo { border: 1px solid #E6C0BA; background: #FDF6F5; }
+.sessao-resumo { margin: 8px 0 4px; }
+.sessao-linha { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13.5px; color: #5F5E5A; border-bottom: 1px solid #F0EEE7; }
+.sessao-linha strong { color: #06344F; font-weight: 600; }
+.sessao-linha.forte { border-bottom: none; margin-top: 4px; font-size: 15px; }
+.sessao-linha.forte span { color: #06344F; font-weight: 600; }
+.sessao-linha.forte strong { color: #0E7EA8; font-weight: 800; }
+.sessao-dif { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-radius: 10px; margin: 12px 0; font-weight: 700; }
+.sessao-dif.ok { background: #EAF7EE; color: #1E7A3C; }
+.sessao-dif.falta { background: #FDECEA; color: #B3261E; }
+.sessao-dif strong { font-size: 17px; }
 .capette-seletor { margin-top: 12px; }
 .capette-seletor select { width: 100%; max-width: 420px; margin: 4px 0; padding: 8px 10px; border: 0.5px solid #D3D1C7; border-radius: 8px; font-size: 13px; }
 .capette-hint { display: block; font-size: 12px; color: #7D7A72; }
