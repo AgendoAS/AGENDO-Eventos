@@ -3348,14 +3348,14 @@ tr:last-child td { border-bottom: none; }
 .relatorio-pdf-hidden .pdf-cancelada { color: #777; text-decoration: line-through; }
 
 .print-only { display: none; }
-.ficha-termica { width: 58mm; padding: 1.5mm 3mm; text-align: center; font-family: Arial, sans-serif; color: #000; page-break-after: always; }
+.ficha-termica { width: 58mm; padding: 2mm 2mm; text-align: center; font-family: 'Courier New', Courier, monospace; font-weight: 700; color: #000; page-break-after: always; border-top: 1px dashed #000; border-bottom: 1px dashed #000; }
 .ficha-topo { font-size: 11px; font-weight: 900; }
-.ficha-sub { font-size: 8px; font-weight: 600; margin-bottom: 1px; }
+.ficha-sub { font-size: 9px; font-weight: 700; margin-bottom: 6px; }
 .ficha-termica h2 { font-size: 14px; margin: 2px 0; color: #000; }
-.ficha-termica h1 { font-size: 22px; margin: 2px 0; text-transform: uppercase; color: #000; line-height: 1.05; }
-.ficha-termica h3 { font-size: 15px; font-weight: 800; margin: 1px 0 2px; color: #000; }
-.ficha-termica p { font-size: 8px; margin: 1px 0; color: #000; }
-.ficha-marca { font-size: 8px; font-weight: 900; letter-spacing: 1px; margin-top: 2px; }
+.ficha-termica h1 { font-size: 21px; font-weight: 900; margin: 4px 0; text-transform: uppercase; color: #000; line-height: 1.1; word-break: break-word; }
+.ficha-termica h3 { font-size: 15px; font-weight: 900; margin: 2px 0 6px; color: #000; }
+.ficha-termica p { font-size: 9px; margin: 1px 0; color: #000; }
+.ficha-marca { font-size: 9px; font-weight: 900; letter-spacing: 1.5px; margin-top: 5px; }
 .cupom-sorteio .ficha-topo { font-size: 12px; }
 .cupom-sorteio h1 { font-size: 30px; letter-spacing: 2px; margin: 2px 0; }
 .linha-pontilhada { border-top: 1px dashed #000; margin: 4px 0; }
