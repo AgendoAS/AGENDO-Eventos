@@ -388,6 +388,7 @@ export default function App() {
   const estoqueTotal = produtos.reduce((s, p) => s + Number(p.estoque_atual || 0), 0);
   const produtosAtivos = produtos.filter((p) => p.ativo).length;
   const caixaFechado = evento?.status === 'fechado';
+  const temCaixaPrincipalReal = caixas.some((c) => c.tipo === 'principal');
   const caixaPrincipal = caixas.find((c) => c.tipo === 'principal') || caixas[0] || null;
   const caixasAtivos = caixas.filter((c) => c.ativo !== false);
   const primeiroCaixaOperador = caixasAtivos.find((c) => c.tipo !== 'principal') || caixasAtivos[0] || caixaPrincipal;
@@ -1071,10 +1072,6 @@ export default function App() {
     limparVendaPrincipal();
   }
 
-  function trocarModo(novoModo) {
-    if (novoModo === 'principal') return entrarComoPrincipal();
-    return entrarComoCaixa(caixaSelecionadoId);
-  }
 
   async function salvarDadosEvento(e) {
     e.preventDefault();
@@ -1323,8 +1320,8 @@ export default function App() {
       {!colapsadoEfetivo && (
         <div className="evento-card sessao-card">
           <small>ACESSO</small>
-          <strong>{modoAcesso === 'principal' ? 'Caixa Principal' : caixaAtual?.nome || 'Caixa'}</strong>
-          <span>{modoAcesso === 'principal' ? 'Administração e fechamento' : caixaAtual?.operador || 'Operador'}</span>
+          <strong>{caixaAtual?.nome || (modoAcesso === 'principal' ? 'Caixa Principal' : 'Caixa')}</strong>
+          <span>{modoAcesso === 'principal' ? 'Administração e vendas' : caixaAtual?.operador || 'Operador'}</span>
         </div>
       )}
 
@@ -1490,6 +1487,12 @@ export default function App() {
             </div>
           )}
           {erro && <div className="mensagem erro no-print">{erro}</div>}
+
+          {modoAcesso === 'principal' && !temCaixaPrincipalReal && caixaAtual && (
+            <div className="mensagem aviso no-print" style={{ cursor: 'pointer' }} onClick={() => setPagina('caixas')}>
+              <i className="ti ti-alert-triangle" /> Não há um <b>Caixa Principal</b> cadastrado — suas vendas estão caindo no <b>{caixaAtual.nome}</b>. Toque pra criar um caixa do tipo <b>Principal</b> em Caixas e operadores.
+            </div>
+          )}
 
           {!(isMobile && modoAcesso === 'caixa' && pagina === 'vender') && (
             <div className="resumo-faixa no-print">
@@ -1942,21 +1945,6 @@ export default function App() {
             </section>
           )}
 
-          {pagina === 'backup' && (
-            <section className="stack">
-              <div className="card">
-                <h2>Backup / exportação</h2>
-                <p>O backup principal fica no banco do AGENDO. Aqui você baixa uma cópia de segurança dos dados atuais.</p>
-                <div className="acoes">
-                  <button className="botao" onClick={exportarBackupJson}>Exportar backup JSON</button>
-                  <button className="botao" onClick={exportarCsv}>Exportar vendas CSV</button>
-                  <button className="botao" onClick={imprimirRelatorio}>Salvar relatório PDF</button>
-                </div>
-                <div className="nota-config">Importação automática ficou bloqueada nesta versão para não duplicar vendas no Supabase por engano.</div>
-              </div>
-            </section>
-          )}
-
           {pagina === 'config' && (
             <section className="stack">
               <div className="card">
@@ -1972,19 +1960,6 @@ export default function App() {
                 <button className="botao perigo" disabled={zerando} onClick={zerarDadosTeste}>
                   <i className="ti ti-trash" /> {zerando ? 'Zerando...' : 'Zerar dados de teste'}
                 </button>
-              </div>
-            </section>
-          )}
-
-          {pagina === 'acesso' && (
-            <section className="stack">
-              <div className="card">
-                <h2>Trocar acesso</h2>
-                <p>Escolha se esta tela vai operar como caixa secundário ou principal.</p>
-                <div className="opcoes-grid">
-                  <button className="opcao-card" onClick={() => trocarModo('principal')}><strong>Entrar como Principal</strong><span>Administração completa do evento.</span></button>
-                  <button className="opcao-card ativa" onClick={() => trocarModo('caixa')}><strong>Continuar como Caixa</strong><span>Venda rápida e reimpressão.</span></button>
-                </div>
               </div>
             </section>
           )}
@@ -2050,6 +2025,7 @@ export default function App() {
             <section className="stack">
               <div className="card no-print">
                 <h2>Sangria e reforço</h2>
+                <p className="nota-config"><b>Reforço</b> = pôr dinheiro no caixa <b>depois</b> que já abriu. <b>Sangria</b> = tirar dinheiro. ⚠️ O <b>troco inicial</b> NÃO entra aqui — ele vai no <b>fundo de troco</b> quando você abre o caixa (em "Abertura/fechamento de caixa"). Se lançar o troco aqui E no fundo, o esperado conta em dobro.</p>
                 <form className="linha-form" onSubmit={registrarMovimentacao}>
                   <select value={movimento.tipo} disabled={caixaFechado} onChange={(e) => setMovimento({ ...movimento, tipo: e.target.value })}>
                     <option>Reforço</option>
@@ -2935,6 +2911,7 @@ nav button.ativo { color: var(--ag-blue); background: rgba(14,126,168,0.08); bor
 }
 .mensagem.ok { background: rgba(150,193,31,0.12); color: #55710B; border: 0.5px solid rgba(150,193,31,0.35); }
 .mensagem.erro { background: rgba(230,50,20,0.08); border: 0.5px solid rgba(230,50,20,0.25); color: var(--ag-red); }
+.mensagem.aviso { background: #FBF0DA; border: 0.5px solid #EAC77A; color: #854F0B; }
 .mensagem-com-acao { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .mini-print { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 11.5px; flex-shrink: 0; }
 .mini-print i { font-size: 14px; }
