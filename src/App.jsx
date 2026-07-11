@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { EVENTO_ID, supabase } from './lib/supabaseClient';
 
@@ -59,6 +59,22 @@ const normalizarNumero = (valor) => {
   if (!valor) return 0;
   return Number(String(valor).replace(',', '.')) || 0;
 };
+
+// Busca TODAS as linhas em blocos — o Supabase corta em ~1000 por consulta.
+// `monta(de, ate)` deve devolver a query já com .range(de, ate).
+async function buscarTudo(monta, tamanho = 1000) {
+  let de = 0;
+  let todos = [];
+  for (;;) {
+    const { data, error } = await monta(de, de + tamanho - 1);
+    if (error) throw error;
+    const bloco = data || [];
+    todos = todos.concat(bloco);
+    if (bloco.length < tamanho) break;
+    de += tamanho;
+  }
+  return todos;
+}
 
 const hojeBR = () =>
   new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
@@ -137,6 +153,7 @@ export default function App() {
   const [impressoraBt, setImpressoraBt] = useState(() => localStorage.getItem('agendo_eventos_impressora_bt') || '');
   const [impressoraBtNome, setImpressoraBtNome] = useState(() => localStorage.getItem('agendo_eventos_impressora_bt_nome') || '');
   const [impressorasBt, setImpressorasBt] = useState([]);
+  const recargaRef = useRef(null);
   const [eventoForm, setEventoForm] = useState({ nome: '', instituicao: '', local_evento: '', data_evento: '', sorteio_valor_por_numero: '' });
   const [novoCaixa, setNovoCaixa] = useState({ nome: '', operador: '', tipo: 'secundario' });
 
@@ -185,53 +202,53 @@ export default function App() {
   }
 
   async function carregarVendas(caixasBase = caixas) {
-    const { data, error } = await supabase
-      .from('vendas')
-      .select('*, caixa:caixas(id,nome,operador), itens:venda_itens(*), sorteio:sorteio_numeros(numero)')
-      .eq('evento_id', EVENTO_ID)
-      .order('criada_em', { ascending: false });
-
-    if (!error) {
-      setVendas(data || []);
+    try {
+      // caminho normal: pagina as vendas com itens/sorteio embutidos (sem teto de 1000)
+      const data = await buscarTudo((de, ate) => supabase
+        .from('vendas')
+        .select('*, caixa:caixas(id,nome,operador), itens:venda_itens(*), sorteio:sorteio_numeros(numero)')
+        .eq('evento_id', EVENTO_ID)
+        .order('criada_em', { ascending: false })
+        .range(de, ate));
+      setVendas(data);
       return;
+    } catch {
+      // fallback (ex.: sorteio_numeros ainda não existe): pagina o básico + itens em lotes
+      const vendasBase = await buscarTudo((de, ate) => supabase
+        .from('vendas').select('*').eq('evento_id', EVENTO_ID).order('criada_em', { ascending: false }).range(de, ate));
+      const ids = vendasBase.map((v) => v.id);
+      let itens = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        const lote = ids.slice(i, i + 200);
+        const parte = await buscarTudo((de, ate) => supabase.from('venda_itens').select('*').in('venda_id', lote).range(de, ate));
+        itens = itens.concat(parte);
+      }
+      setVendas(vendasBase.map((v) => ({
+        ...v,
+        caixa: caixasBase.find((c) => c.id === v.caixa_id) || null,
+        itens: itens.filter((it) => it.venda_id === v.id),
+      })));
     }
-
-    const { data: vendasBase, error: vendasError } = await supabase
-      .from('vendas')
-      .select('*')
-      .eq('evento_id', EVENTO_ID)
-      .order('criada_em', { ascending: false });
-    if (vendasError) throw vendasError;
-
-    const ids = (vendasBase || []).map((v) => v.id);
-    let itens = [];
-    if (ids.length) {
-      const { data: itensData, error: itensError } = await supabase
-        .from('venda_itens')
-        .select('*')
-        .in('venda_id', ids);
-      if (itensError) throw itensError;
-      itens = itensData || [];
-    }
-
-    setVendas((vendasBase || []).map((v) => ({
-      ...v,
-      caixa: caixasBase.find((c) => c.id === v.caixa_id) || null,
-      itens: itens.filter((i) => i.venda_id === v.id),
-    })));
   }
 
   async function carregarMovimentacoes(caixasBase = caixas) {
-    const { data, error } = await supabase
+    const data = await buscarTudo((de, ate) => supabase
       .from('movimentacoes_caixa')
       .select('*')
       .eq('evento_id', EVENTO_ID)
-      .order('criada_em', { ascending: false });
-    if (error) throw error;
-    setMovimentacoes((data || []).map((m) => ({
+      .order('criada_em', { ascending: false })
+      .range(de, ate));
+    setMovimentacoes(data.map((m) => ({
       ...m,
       caixa: caixasBase.find((c) => c.id === m.caixa_id) || null,
     })));
+  }
+
+  // Debounce: em vez de recarregar tudo a cada venda, junta as mudanças e recarrega
+  // no máximo a cada 1,5s — bem mais leve com vários caixas vendendo ao mesmo tempo.
+  function agendarRecarga() {
+    if (recargaRef.current) clearTimeout(recargaRef.current);
+    recargaRef.current = setTimeout(() => { carregarTudo(); }, 1500);
   }
 
   useEffect(() => {
@@ -268,11 +285,11 @@ export default function App() {
 
     const canal = supabase
       .channel('agendo-eventos-principal')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendas', filter: `evento_id=eq.${EVENTO_ID}` }, carregarTudo)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'produtos', filter: `evento_id=eq.${EVENTO_ID}` }, carregarTudo)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'caixas', filter: `evento_id=eq.${EVENTO_ID}` }, carregarTudo)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'movimentacoes_caixa', filter: `evento_id=eq.${EVENTO_ID}` }, carregarTudo)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sorteio_numeros', filter: `evento_id=eq.${EVENTO_ID}` }, carregarTudo)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendas', filter: `evento_id=eq.${EVENTO_ID}` }, agendarRecarga)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'produtos', filter: `evento_id=eq.${EVENTO_ID}` }, agendarRecarga)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'caixas', filter: `evento_id=eq.${EVENTO_ID}` }, agendarRecarga)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'movimentacoes_caixa', filter: `evento_id=eq.${EVENTO_ID}` }, agendarRecarga)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sorteio_numeros', filter: `evento_id=eq.${EVENTO_ID}` }, agendarRecarga)
       .subscribe();
 
     return () => supabase.removeChannel(canal);
