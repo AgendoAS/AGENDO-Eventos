@@ -556,7 +556,7 @@ export default function App() {
     cmd += `${tituloFicha}\n`;        // nome do evento
     cmd += ESC + 'E' + '\x00';        // negrito off
     if (instituicao) cmd += `${instituicao}\n`;
-    cmd += GS + '!' + '\x11';         // dobro altura+largura
+    cmd += GS + '!' + '\x01';         // dobro altura só (produto) — cabe e centraliza
     cmd += ESC + 'E' + '\x01';        // negrito on
     cmd += `${paraTextoTermico(item.produto)}\n`.toUpperCase();
     cmd += GS + '!' + '\x01';         // dobro altura só (valor)
