@@ -763,10 +763,11 @@ export default function App() {
         vendaCompleta = await buscarVendaParaImpressao(vendaId);
         setVendaImpressaoDireta(vendaCompleta);
         setVendaImpressaoId(vendaId);
-        // Não imprime automático: abre a confirmação com o botão "Imprimir".
-        // O toque no botão é um gesto do usuário, então o navegador do celular
-        // libera a impressão (o print automático depois do await era bloqueado).
         setVendaConcluida(vendaCompleta);
+        // Tenta imprimir automático: no PC (kiosk) sai silencioso, no APK vai pra
+        // Bluetooth nativa, no RawBT dispara o app. Se o navegador bloquear (celular
+        // sem RawBT), o botão "Imprimir fichas" do modal continua como reforço.
+        abrirImpressaoFichas(vendaCompleta);
       }
 
       const qtdSorteio = (vendaCompleta?.sorteio || []).length;
@@ -1404,7 +1405,7 @@ export default function App() {
         )}
 
         {vendaConcluida && (
-          <div className="pos-venda-overlay no-print" onClick={(e) => { if (e.target === e.currentTarget) setVendaConcluida(null); }}>
+          <div className="pos-venda-overlay no-print">
             <div className="pos-venda-card">
               <div className="pos-venda-check"><i className="ti ti-check" /></div>
               <h2>Venda Nº {numero(vendaConcluida.numero)} concluída!</h2>
