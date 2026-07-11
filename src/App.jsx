@@ -1804,6 +1804,15 @@ export default function App() {
                   Exemplos: <b>10</b> → a cada R$10; <b>20</b> → a cada R$20 (compra de R$50 gera 2 números). Coloque <b>0</b> para <b>desligar</b> o sorteio. Cortesia não gera número.
                 </div>
               </div>
+
+              <div className="card">
+                <h2><i className="ti ti-building-bank" /> Integração com o CAPETTE</h2>
+                <p>Pra levar o dinheiro da festa pro CAPETTE (contabilidade): lá você cadastra o evento, cola o ID abaixo no <b>vínculo</b> e clica <b>“Importar vendas do AGENDO”</b>. Aqui é só copiar o ID desta festa.</p>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+                  <code style={{ fontSize: 12, background: '#F3F2EE', padding: '7px 10px', borderRadius: 6, userSelect: 'all' }}>{EVENTO_ID}</code>
+                  <button className="botao" onClick={() => { try { navigator.clipboard?.writeText(EVENTO_ID); aviso('ID copiado!'); } catch { aviso('Copie o código ao lado.'); } }}><i className="ti ti-copy" /> Copiar ID</button>
+                </div>
+              </div>
             </section>
           )}
 
@@ -2084,16 +2093,6 @@ export default function App() {
                     <button className="botao" onClick={imprimirRelatorio}>Gerar PDF</button>
                     <button className="botao" onClick={exportarCsv}>Exportar CSV</button>
                     <button className="botao" onClick={exportarBackupJson}>Backup (JSON)</button>
-                  </div>
-                </div>
-                <div className="capette-seletor">
-                  <label className="label">Migração para o CAPETTE</label>
-                  <div style={{ fontSize: 13, color: '#5F5E5A', lineHeight: 1.5 }}>
-                    A migração é feita <b>no CAPETTE</b>: lá você cadastra o evento, cola o ID abaixo no campo de vínculo e clica <b>“Importar vendas do AGENDO”</b>. Aqui é só copiar o ID desta festa:
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                    <code style={{ fontSize: 12, background: '#F3F2EE', padding: '7px 10px', borderRadius: 6, userSelect: 'all' }}>{EVENTO_ID}</code>
-                    <button className="botao" onClick={() => { try { navigator.clipboard?.writeText(EVENTO_ID); aviso('ID copiado!'); } catch { aviso('Copie o código ao lado.'); } }}><i className="ti ti-copy" /> Copiar ID</button>
                   </div>
                 </div>
               </div>
