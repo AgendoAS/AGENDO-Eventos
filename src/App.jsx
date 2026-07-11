@@ -154,6 +154,7 @@ export default function App() {
   const [impressoraBtNome, setImpressoraBtNome] = useState(() => localStorage.getItem('agendo_eventos_impressora_bt_nome') || '');
   const [impressorasBt, setImpressorasBt] = useState([]);
   const recargaRef = useRef(null);
+  const [fundoAbertura, setFundoAbertura] = useState('');
   const [eventoForm, setEventoForm] = useState({ nome: '', instituicao: '', local_evento: '', data_evento: '', sorteio_valor_por_numero: '' });
   const [novoCaixa, setNovoCaixa] = useState({ nome: '', operador: '', tipo: 'secundario' });
 
@@ -395,6 +396,8 @@ export default function App() {
   const caixaAtual = modoAcesso === 'principal'
     ? caixaPrincipal
     : (caixasAtivos.find((c) => c.id === caixaSelecionadoId) || primeiroCaixaOperador || caixaPrincipal);
+  const finCaixaAtual = financeiroCaixa(caixaAtual);
+  const caixaAbertoParaVenda = !!finCaixaAtual.aberto;
   const produtosVendaveis = produtos.filter((p) => p.ativo);
   const categoriasProduto = useMemo(() => {
     const set = new Set(produtosVendaveis.map((p) => p.categoria || 'Geral'));
@@ -411,7 +414,7 @@ export default function App() {
   const totalCarrinho = carrinho.reduce((s, item) => s + normalizarNumero(item.preco) * item.quantidade, 0);
   const qtdCarrinho = carrinho.reduce((s, item) => s + item.quantidade, 0);
   const troco = pagamento === 'Dinheiro' ? Math.max(normalizarNumero(valorRecebido) - totalCarrinho, 0) : 0;
-  const podeFinalizarVenda = carrinho.length > 0 && caixaAtual && !caixaFechado && !salvandoVenda
+  const podeFinalizarVenda = carrinho.length > 0 && caixaAtual && !caixaFechado && caixaAbertoParaVenda && !salvandoVenda
     && (pagamento !== 'Dinheiro' || normalizarNumero(valorRecebido) >= totalCarrinho)
     && (pagamento !== 'Fiado' || pessoaFiadoSelecionada);
   const papeisImpressao = {
@@ -491,6 +494,7 @@ export default function App() {
 
   function adicionarAoCarrinho(produto) {
     if (caixaFechado) return aviso('Evento fechado. Não é possível vender.');
+    if (!caixaAbertoParaVenda) return aviso('Abra o caixa (informe o fundo de troco) antes de vender.');
     setErro('');
     setMensagem('');
     setCarrinho((atual) => {
@@ -1561,7 +1565,32 @@ export default function App() {
           )}
 
 
-          {pagina === 'vender' && (
+          {pagina === 'vender' && !caixaAbertoParaVenda && (
+            <section className="stack">
+              <div className="card">
+                <div className="cabecalho-card">
+                  <div>
+                    <h2>Abra o caixa pra vender</h2>
+                    <p>{finCaixaAtual.fechado
+                      ? `O ${caixaAtual?.nome || 'caixa'} foi fechado. Reabra pra vender de novo.`
+                      : `Informe o fundo de troco pra abrir o ${caixaAtual?.nome || 'caixa'} e começar.`}</p>
+                  </div>
+                  <span className="pill">Fechado</span>
+                </div>
+                {finCaixaAtual.fechado ? (
+                  <div className="botoes-finalizar"><button className="botao verde" disabled={!caixaAtual} onClick={() => reabrirCaixaSessao(caixaAtual)}><i className="ti ti-lock-open" /> Reabrir caixa</button></div>
+                ) : (
+                  <>
+                    <label className="label">Fundo de troco (R$)</label>
+                    <input inputMode="decimal" value={fundoAbertura} onChange={(e) => setFundoAbertura(e.target.value)} placeholder="Ex.: 100 (ou 0 se não tem troco)" />
+                    <div className="botoes-finalizar"><button className="botao verde" disabled={fundoAbertura === '' || !caixaAtual} onClick={() => { abrirCaixaSessao(caixaAtual, fundoAbertura); setFundoAbertura(''); }}><i className="ti ti-lock-open" /> Abrir caixa e começar</button></div>
+                  </>
+                )}
+              </div>
+            </section>
+          )}
+
+          {pagina === 'vender' && caixaAbertoParaVenda && (
             <section className="grid-venda">
               <div className="card">
                 <div className="cabecalho-card">
