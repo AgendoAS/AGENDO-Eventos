@@ -155,6 +155,7 @@ export default function App() {
   const [impressorasBt, setImpressorasBt] = useState([]);
   const recargaRef = useRef(null);
   const [fundoAbertura, setFundoAbertura] = useState('');
+  const [imprimindoRelatorio, setImprimindoRelatorio] = useState(false);
   const [eventoForm, setEventoForm] = useState({ nome: '', instituicao: '', local_evento: '', data_evento: '', sorteio_valor_por_numero: '' });
   const [novoCaixa, setNovoCaixa] = useState({ nome: '', operador: '', tipo: 'secundario' });
 
@@ -981,10 +982,13 @@ export default function App() {
   function imprimirRelatorio() {
     document.body.classList.remove('imprimindo-fichas');
     document.body.classList.add('imprimindo-relatorio');
-    const limparModo = () => document.body.classList.remove('imprimindo-relatorio');
+    // Troca o @page de 58mm (ficha) por A4 enquanto imprime o relatório —
+    // sem isso o navegador trava o papel em 58mm e o relatório sai espremido.
+    setImprimindoRelatorio(true);
+    const limparModo = () => { document.body.classList.remove('imprimindo-relatorio'); setImprimindoRelatorio(false); };
     window.addEventListener('afterprint', limparModo, { once: true });
-    setMensagem('Na janela de impressão, escolha Salvar como PDF em A4.');
-    setTimeout(() => window.print(), 150);
+    setMensagem('Na janela de impressão, escolha "Salvar como PDF".');
+    setTimeout(() => window.print(), 300);
   }
 
   function exportarCsv() {
@@ -1375,7 +1379,7 @@ export default function App() {
   return (
     <>
       <style>{css}</style>
-      <style>{cssImpressao(papelAtual.largura)}</style>
+      <style>{imprimindoRelatorio ? '@media print { @page { size: A4 portrait; margin: 12mm; } }' : cssImpressao(papelAtual.largura)}</style>
       <div className={`app-shell ${colapsado ? 'colapsado' : ''}`}>
         {buscaAberta && (
           <div className="busca-overlay no-print" onClick={(e) => { if (e.target === e.currentTarget) setBuscaAberta(false); }}>
@@ -2539,51 +2543,75 @@ function Relatorio({ evento, vendas, resumo, produtos, caixas }) {
 
 function RelatorioPdf({ evento, vendas, resumo, produtos, caixas, movimentacoes, caixaFechado }) {
   const vendasFinalizadas = vendas.filter((v) => v.status !== 'cancelada');
-  const formasRelatorio = ['Pix', 'Dinheiro', 'Débito', 'Crédito', 'Fiado', 'Cortesia'].filter((f) => Number(resumo.porForma[f] || 0) > 0 || ['Pix', 'Dinheiro', 'Débito', 'Crédito'].includes(f));
-  const dataGeracao = hojeBR();
-  const statusCaixa = caixaFechado ? `Fechado em ${evento?.fechado_em ? new Date(evento.fechado_em).toLocaleString('pt-BR') : '-'}` : 'Caixa aberto';
+  const numerosSorteio = vendasFinalizadas.reduce((s, v) => s + ((v.sorteio || []).length), 0);
+  const formasRelatorio = ['Pix', 'Dinheiro', 'Débito', 'Crédito', 'Fiado', 'Cortesia']
+    .map((f) => [f, Number(resumo.porForma[f] || 0)])
+    .filter(([, valor]) => valor > 0);
+  const fiado = fiadoPorPessoa(vendas);
+  const porCaixa = totalPorCaixa(vendas, caixas);
+  const agora = new Date();
+  const protocolo = `AG-EV-${agora.getFullYear()}${String(agora.getMonth() + 1).padStart(2, '0')}${String(agora.getDate()).padStart(2, '0')}`;
+  const dataEmissao = agora.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const dataEvento = evento?.data_evento ? new Date(`${evento.data_evento}T12:00:00`).toLocaleDateString('pt-BR') : '—';
+  const temDinheiro = Number(resumo.porForma.Dinheiro || 0) > 0 || resumo.reforcos > 0 || resumo.sangrias > 0;
 
   return (
     <div className="relatorio-pdf-hidden" aria-hidden="true">
       <div className="pdf-topo">
         <div>
-          <div className="pdf-marca">AGENDO Eventos</div>
-          <h1>Relatório Geral do Evento</h1>
-          <p>{dataGeracao} • {statusCaixa}</p>
+          <div className="pdf-marca">AGENDO Eventos · {evento?.instituicao || 'Instituição'}</div>
+          <h1>{evento?.nome || 'Relatório do evento'}</h1>
+          <p>{dataEvento}{evento?.local_evento ? ` · ${evento.local_evento}` : ''} · {caixaFechado ? 'Evento encerrado' : 'Evento em andamento'}</p>
         </div>
-        <div className="pdf-selo">Relatório PDF</div>
+        <div className="pdf-selo">
+          <strong>Relatório do evento</strong>
+          <span>{protocolo}</span>
+          <span>Emitido em {dataEmissao}</span>
+        </div>
+      </div>
+
+      <div className="pdf-figuras">
+        <div className="pdf-figura"><span>Total arrecadado</span><strong>{moeda(resumo.totalVendido)}</strong></div>
+        <div className="pdf-figura"><span>Vendas</span><strong>{vendasFinalizadas.length}</strong></div>
+        <div className="pdf-figura"><span>Fichas vendidas</span><strong>{resumo.fichas}</strong></div>
+        <div className="pdf-figura"><span>Números do sorteio</span><strong>{numerosSorteio}</strong></div>
       </div>
 
       <section className="pdf-bloco">
-        <h2>Dados do evento</h2>
+        <h2>Receita por forma de pagamento</h2>
         <table>
+          <thead><tr><th>Forma</th><th className="pdf-num">Valor</th><th className="pdf-num">% do total</th></tr></thead>
           <tbody>
-            <tr><th>Instituição</th><td>{evento?.instituicao || '-'}</td><th>Evento</th><td>{evento?.nome || '-'}</td></tr>
-            <tr><th>Data</th><td>{evento?.data_evento ? new Date(`${evento.data_evento}T00:00:00`).toLocaleDateString('pt-BR') : '-'}</td><th>Local</th><td>{evento?.local_evento || '-'}</td></tr>
-            <tr><th>Status</th><td>{evento?.status || '-'}</td><th>Caixas cadastrados</th><td>{caixas.length}</td></tr>
+            {formasRelatorio.map(([f, valor]) => (
+              <tr key={`pdf-forma-${f}`}><td>{f}</td><td className="pdf-num pdf-verde">{moeda(valor)}</td><td className="pdf-num">{resumo.totalVendido ? Math.round((valor / resumo.totalVendido) * 100) : 0}%</td></tr>
+            ))}
+            <tr className="pdf-total-row"><td>Total arrecadado</td><td className="pdf-num pdf-verde">{moeda(resumo.totalVendido)}</td><td className="pdf-num">100%</td></tr>
           </tbody>
         </table>
       </section>
 
-      <section className="pdf-bloco">
-        <h2>Resumo geral</h2>
-        <div className="pdf-grid">
-          <div className="pdf-kpi"><span>Total vendido</span><strong>{moeda(resumo.totalVendido)}</strong></div>
-          <div className="pdf-kpi"><span>Vendas finalizadas</span><strong>{vendasFinalizadas.length}</strong></div>
-          <div className="pdf-kpi"><span>Fichas geradas</span><strong>{resumo.fichas}</strong></div>
-          <div className="pdf-kpi"><span>Canceladas</span><strong>{moeda(resumo.totalCancelado)}</strong></div>
-        </div>
-      </section>
+      {temDinheiro && (
+        <section className="pdf-bloco">
+          <h2>Conferência do dinheiro</h2>
+          <table>
+            <tbody>
+              <tr><td>Vendas em dinheiro</td><td className="pdf-num">{moeda(resumo.dinheiroVendas)}</td></tr>
+              <tr><td>Reforços de caixa</td><td className="pdf-num">+ {moeda(resumo.reforcos)}</td></tr>
+              <tr><td>Sangrias</td><td className="pdf-num">− {moeda(resumo.sangrias)}</td></tr>
+              <tr className="pdf-total-row"><td>Dinheiro esperado em caixa</td><td className="pdf-num">{moeda(resumo.dinheiroEsperado)}</td></tr>
+            </tbody>
+          </table>
+        </section>
+      )}
 
       <section className="pdf-bloco">
-        <h2>Resumo financeiro</h2>
+        <h2>Desempenho por caixa</h2>
         <table>
-          <thead><tr><th>Item</th><th>Total</th></tr></thead>
+          <thead><tr><th>Caixa</th><th className="pdf-num">Vendas</th><th className="pdf-num">Fichas</th><th className="pdf-num">Total</th></tr></thead>
           <tbody>
-            {formasRelatorio.map((f) => <tr key={`pdf-forma-${f}`}><td>{f}</td><td>{moeda(resumo.porForma[f] || 0)}</td></tr>)}
-            <tr><td>Reforços de caixa</td><td>{moeda(resumo.reforcos)}</td></tr>
-            <tr><td>Sangrias</td><td>{moeda(resumo.sangrias)}</td></tr>
-            <tr><th>Dinheiro esperado no caixa</th><th>{moeda(resumo.dinheiroEsperado)}</th></tr>
+            {porCaixa.map((c) => (
+              <tr key={`pdf-caixa-${c.nome}`}><td>{c.nome}{c.operador && c.operador !== '-' ? ` (${c.operador})` : ''}</td><td className="pdf-num">{c.vendas}</td><td className="pdf-num">{c.fichas}</td><td className="pdf-num">{moeda(c.total)}</td></tr>
+            ))}
           </tbody>
         </table>
       </section>
@@ -2591,88 +2619,59 @@ function RelatorioPdf({ evento, vendas, resumo, produtos, caixas, movimentacoes,
       <section className="pdf-bloco">
         <h2>Produtos vendidos</h2>
         <table>
-          <thead><tr><th>Produto</th><th>Preço</th><th>Qtd.</th><th>Valor vendido</th></tr></thead>
+          <thead><tr><th>Produto</th><th className="pdf-num">Preço</th><th className="pdf-num">Qtd.</th><th className="pdf-num">Valor</th></tr></thead>
           <tbody>
-            {resumo.porProduto.filter((p) => !ePromo(p, produtos)).length ? resumo.porProduto.filter((p) => !ePromo(p, produtos)).map((p) => (
-              <tr key={`pdf-produto-${p.nome}-${p.precoUnit}`}><td>{p.nome}</td><td>{moeda(p.precoUnit)}</td><td>{p.qtd}</td><td>{moeda(p.valor)}</td></tr>
-            )) : <tr><td colSpan="4">Nenhum produto vendido.</td></tr>}
-          </tbody>
-        </table>
-      </section>
-
-      <section className="pdf-bloco">
-        <h2>Produtos vendidos na promoção</h2>
-        <table>
-          <thead><tr><th>Produto</th><th>Preço promo</th><th>Qtd.</th><th>Valor vendido</th></tr></thead>
-          <tbody>
-            {resumo.porProduto.filter((p) => ePromo(p, produtos)).length ? resumo.porProduto.filter((p) => ePromo(p, produtos)).map((p) => (
-              <tr key={`pdf-promo-${p.nome}-${p.precoUnit}`}><td>{p.nome}</td><td>{moeda(p.precoUnit)}</td><td>{p.qtd}</td><td>{moeda(p.valor)}</td></tr>
-            )) : <tr><td colSpan="4">Nenhuma venda em promoção.</td></tr>}
-          </tbody>
-        </table>
-      </section>
-
-      <section className="pdf-bloco">
-        <h2>Fiado — a receber por pessoa</h2>
-        <table>
-          <thead><tr><th>Pessoa</th><th>Vendas</th><th>Total a receber</th></tr></thead>
-          <tbody>
-            {fiadoPorPessoa(vendas).length ? fiadoPorPessoa(vendas).map((p) => (
-              <tr key={`pdf-fiado-${p.nome}`}><td>{p.nome}</td><td>{p.qtdVendas}</td><td>{moeda(p.total)}</td></tr>
-            )) : <tr><td colSpan="3">Ninguém deve nada no momento.</td></tr>}
-          </tbody>
-        </table>
-      </section>
-
-      <section className="pdf-bloco">
-        <h2>Estoque atual</h2>
-        <table>
-          <thead><tr><th>Produto</th><th>Preço</th><th>Estoque</th><th>Status</th></tr></thead>
-          <tbody>
-            {produtos.map((p) => <tr key={`pdf-estoque-${p.id}`}><td>{p.nome}</td><td>{moeda(p.preco)}</td><td>{Math.max(0, p.estoque_atual)}</td><td>{p.ativo ? 'Ativo' : 'Inativo'}</td></tr>)}
-          </tbody>
-        </table>
-      </section>
-
-      <section className="pdf-bloco">
-        <h2>Total por caixa</h2>
-        <table>
-          <thead><tr><th>Caixa</th><th>Vendas</th><th>Fichas</th><th>Total vendido</th></tr></thead>
-          <tbody>
-            {totalPorCaixa(vendas, caixas).map((c) => (
-              <tr key={`pdf-caixa-${c.nome}`}><td>{c.nome} ({c.operador})</td><td>{c.vendas}</td><td>{c.fichas}</td><td>{moeda(c.total)}</td></tr>
+            {resumo.porProduto.map((p) => (
+              <tr key={`pdf-produto-${p.nome}-${p.precoUnit}`}><td>{p.nome}{ePromo(p, produtos) ? ' (promoção)' : ''}</td><td className="pdf-num">{moeda(p.precoUnit)}</td><td className="pdf-num">{p.qtd}</td><td className="pdf-num">{moeda(p.valor)}</td></tr>
             ))}
+            <tr className="pdf-total-row"><td>Total</td><td /><td className="pdf-num">{resumo.fichas}</td><td className="pdf-num">{moeda(resumo.totalVendido)}</td></tr>
           </tbody>
         </table>
       </section>
 
-      <section className="pdf-bloco">
-        <h2>Sangrias e reforços</h2>
-        <table>
-          <thead><tr><th>Tipo</th><th>Valor</th><th>Caixa</th><th>Operador</th><th>Horário</th><th>Motivo</th></tr></thead>
-          <tbody>
-            {movimentacoes.length ? movimentacoes.map((m) => (
-              <tr key={`pdf-mov-${m.id}`}>
-                <td>{m.tipo}</td><td>{moeda(m.valor)}</td><td>{m.caixa?.nome || '-'}</td><td>{m.operador || '-'}</td><td>{new Date(m.criada_em).toLocaleString('pt-BR')}</td><td>{m.motivo || '-'}</td>
-              </tr>
-            )) : <tr><td colSpan="6">Nenhuma movimentação registrada.</td></tr>}
-          </tbody>
-        </table>
-      </section>
+      {fiado.length > 0 && (
+        <section className="pdf-bloco">
+          <h2>Fiado — a receber</h2>
+          <table>
+            <thead><tr><th>Pessoa</th><th className="pdf-num">Vendas</th><th className="pdf-num">Total a receber</th></tr></thead>
+            <tbody>
+              {fiado.map((p) => (
+                <tr key={`pdf-fiado-${p.nome}`}><td>{p.nome}</td><td className="pdf-num">{p.qtdVendas}</td><td className="pdf-num pdf-verm">{moeda(p.total)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
-      <section className="pdf-bloco">
-        <h2>Vendas realizadas</h2>
+      {movimentacoes.length > 0 && (
+        <section className="pdf-bloco">
+          <h2>Sangrias e reforços</h2>
+          <table>
+            <thead><tr><th>Tipo</th><th className="pdf-num">Valor</th><th>Caixa</th><th>Operador</th><th>Horário</th><th>Motivo</th></tr></thead>
+            <tbody>
+              {movimentacoes.map((m) => (
+                <tr key={`pdf-mov-${m.id}`}>
+                  <td>{m.tipo}</td><td className="pdf-num">{moeda(m.valor)}</td><td>{m.caixa?.nome || '—'}</td><td>{m.operador || '—'}</td><td>{new Date(m.criada_em).toLocaleString('pt-BR')}</td><td>{m.motivo || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      <section className="pdf-bloco pdf-longo">
+        <h2>Vendas realizadas ({vendas.length})</h2>
         <table>
-          <thead><tr><th>Venda</th><th>Horário</th><th>Caixa</th><th>Pagamento</th><th>Itens / fichas</th><th>Total</th><th>Status</th></tr></thead>
+          <thead><tr><th>Venda</th><th>Horário</th><th>Caixa</th><th>Pagamento</th><th className="pdf-num">Fichas</th><th className="pdf-num">Total</th><th>Status</th></tr></thead>
           <tbody>
             {vendas.length ? vendas.map((v) => (
               <tr key={`pdf-venda-${v.id}`} className={v.status === 'cancelada' ? 'pdf-cancelada' : ''}>
                 <td>#{numero(v.numero)}</td>
-                <td>{new Date(v.criada_em).toLocaleString('pt-BR')}</td>
-                <td>{v.caixa?.nome || '-'}</td>
+                <td>{new Date(v.criada_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                <td>{v.caixa?.nome || '—'}</td>
                 <td>{v.forma_pagamento}</td>
-                <td>{(v.itens || []).map((i) => `${i.quantidade}x ${i.nome_produto} • fichas ${ficha(i.ficha_inicio)}-${ficha(i.ficha_fim)}`).join(' | ')}</td>
-                <td>{moeda(v.total)}</td>
+                <td className="pdf-num">{(v.itens || []).reduce((s, i) => s + Number(i.quantidade || 0), 0)}</td>
+                <td className="pdf-num">{moeda(v.total)}</td>
                 <td>{v.status}{v.status === 'cancelada' && v.motivo_cancelamento ? ` — ${v.motivo_cancelamento}` : ''}</td>
               </tr>
             )) : <tr><td colSpan="7">Nenhuma venda registrada.</td></tr>}
@@ -2680,7 +2679,15 @@ function RelatorioPdf({ evento, vendas, resumo, produtos, caixas, movimentacoes,
         </table>
       </section>
 
-      <div className="pdf-rodape">AGENDO Eventos • Documento gerado automaticamente pelo Caixa Principal</div>
+      <div className="pdf-assinaturas">
+        <div>Responsável pelo evento</div>
+        <div>Tesouraria / Financeiro</div>
+      </div>
+
+      <div className="pdf-rodape">
+        <div>{evento?.instituicao || 'Instituição'} · {evento?.nome || 'Evento'} · documento gerado pelo AGENDO Eventos</div>
+        <div><strong>AGENDO Integra</strong> · {protocolo}</div>
+      </div>
     </div>
   );
 }
@@ -3333,23 +3340,37 @@ tr:last-child td { border-bottom: none; }
 .relatorio h2 { font-size: 17px; }
 .relatorio p { font-size: 12px; }
 
-.relatorio-pdf-hidden { display: none; }
+.relatorio-pdf-hidden { display: none; font-family: Arial, Helvetica, sans-serif; color: #171A1F; }
 .relatorio-pdf-hidden h1,
 .relatorio-pdf-hidden h2,
 .relatorio-pdf-hidden p { margin: 0; }
-.relatorio-pdf-hidden .pdf-topo { border-bottom: 2px solid #06344F; padding-bottom: 10px; margin-bottom: 14px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.relatorio-pdf-hidden .pdf-marca { color: #0E7EA8; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
-.relatorio-pdf-hidden .pdf-topo h1 { color: #06344F; font-size: 22px; margin-top: 4px; }
-.relatorio-pdf-hidden .pdf-topo p { color: #5F5E5A; font-size: 11px; margin-top: 4px; }
-.relatorio-pdf-hidden .pdf-selo { border: 1px solid #D9D6CE; border-radius: 999px; padding: 6px 10px; color: #06344F; font-weight: 800; font-size: 10px; white-space: nowrap; }
-.relatorio-pdf-hidden .pdf-bloco { margin-top: 14px; page-break-inside: avoid; break-inside: avoid; }
-.relatorio-pdf-hidden .pdf-bloco h2 { color: #06344F; font-size: 14px; margin-bottom: 7px; border-bottom: 1px solid #E0DDD5; padding-bottom: 5px; }
-.relatorio-pdf-hidden .pdf-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.relatorio-pdf-hidden .pdf-kpi { border: 1px solid #E0DDD5; border-radius: 8px; padding: 8px; background: #fff; }
-.relatorio-pdf-hidden .pdf-kpi span { display: block; color: #6F6C66; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
-.relatorio-pdf-hidden .pdf-kpi strong { display: block; color: #06344F; font-size: 16px; margin-top: 4px; }
-.relatorio-pdf-hidden .pdf-rodape { margin-top: 16px; border-top: 1px solid #E0DDD5; padding-top: 8px; font-size: 9px; color: #6F6C66; text-align: center; }
-.relatorio-pdf-hidden .pdf-cancelada { color: #777; text-decoration: line-through; }
+.relatorio-pdf-hidden .pdf-topo { border-bottom: 2px solid #06344F; padding-bottom: 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.relatorio-pdf-hidden .pdf-marca { color: #0E7EA8; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; }
+.relatorio-pdf-hidden .pdf-topo h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; color: #06344F; font-size: 24px; margin-top: 5px; letter-spacing: -.02em; }
+.relatorio-pdf-hidden .pdf-topo p { color: #626B76; font-size: 10px; margin-top: 4px; }
+.relatorio-pdf-hidden .pdf-selo { border: 1px solid #D7D0C2; border-radius: 8px; padding: 7px 11px; text-align: right; white-space: nowrap; }
+.relatorio-pdf-hidden .pdf-selo strong { display: block; color: #06344F; font-size: 9.5px; }
+.relatorio-pdf-hidden .pdf-selo span { display: block; color: #66717E; font-size: 8px; margin-top: 2px; font-weight: 400; }
+.relatorio-pdf-hidden .pdf-figuras { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid #D7D0C2; border-bottom: 1px solid #D7D0C2; margin: 14px 0 4px; }
+.relatorio-pdf-hidden .pdf-figura { padding: 11px 10px; }
+.relatorio-pdf-hidden .pdf-figura + .pdf-figura { border-left: 1px solid #ECE6DA; }
+.relatorio-pdf-hidden .pdf-figura span { display: block; font-size: 7.5px; text-transform: uppercase; letter-spacing: .1em; color: #6B7280; margin-bottom: 5px; }
+.relatorio-pdf-hidden .pdf-figura strong { font-family: Georgia, serif; font-weight: 400; font-size: 17px; color: #06344F; }
+.relatorio-pdf-hidden .pdf-bloco { margin-top: 16px; page-break-inside: avoid; break-inside: avoid; }
+.relatorio-pdf-hidden .pdf-bloco.pdf-longo { page-break-inside: auto; break-inside: auto; }
+.relatorio-pdf-hidden .pdf-bloco h2 { font-family: Georgia, serif; font-weight: 400; color: #06344F; font-size: 14.5px; margin-bottom: 7px; letter-spacing: -.01em; }
+.relatorio-pdf-hidden table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+.relatorio-pdf-hidden th { text-align: left; font-size: 7.5px; text-transform: uppercase; letter-spacing: .08em; color: #6B7280; border-bottom: 1.5px solid #06344F; padding: 4px 6px; }
+.relatorio-pdf-hidden td { border-bottom: 0.5px solid #ECE6DA; padding: 4.5px 6px; color: #171A1F; }
+.relatorio-pdf-hidden th.pdf-num, .relatorio-pdf-hidden td.pdf-num { text-align: right; white-space: nowrap; }
+.relatorio-pdf-hidden .pdf-verde { color: #2E6F3E; }
+.relatorio-pdf-hidden .pdf-verm { color: #A7352C; }
+.relatorio-pdf-hidden .pdf-total-row td { background: #F5F2EA; font-weight: 700; border-top: 1.5px solid #D7D0C2; border-bottom: none; }
+.relatorio-pdf-hidden .pdf-cancelada td { color: #999; text-decoration: line-through; }
+.relatorio-pdf-hidden .pdf-assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin: 46px 24px 0; }
+.relatorio-pdf-hidden .pdf-assinaturas div { border-top: 1px solid #171A1F; padding-top: 6px; text-align: center; font-size: 9px; color: #444; }
+.relatorio-pdf-hidden .pdf-rodape { margin-top: 20px; border-top: 1px solid #D7D0C2; padding-top: 8px; font-size: 8.5px; color: #66717E; display: flex; justify-content: space-between; gap: 12px; text-align: left; }
+.relatorio-pdf-hidden .pdf-rodape strong { color: #06344F; }
 
 .print-only { display: none; }
 .ficha-termica { width: 48mm; padding: 2mm 1mm; text-align: center; font-family: 'Courier New', Courier, monospace; font-weight: 700; color: #000; page-break-after: always; border-top: 1px dashed #000; border-bottom: 1px dashed #000; }
@@ -3495,33 +3516,19 @@ nav button.ativo {
     display: block !important;
     width: 100% !important;
     background: #fff !important;
-    color: #111 !important;
-    font-family: Arial, sans-serif !important;
-    font-size: 11px !important;
     padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   body.imprimindo-relatorio .relatorio-pdf-hidden table {
     width: 100% !important;
     border-collapse: collapse !important;
     page-break-inside: auto !important;
   }
-  body.imprimindo-relatorio .relatorio-pdf-hidden th,
-  body.imprimindo-relatorio .relatorio-pdf-hidden td {
-    border: 1px solid #D9D6CE !important;
-    padding: 5px 6px !important;
-    font-size: 10px !important;
-    color: #111 !important;
-    text-align: left !important;
-    vertical-align: top !important;
+  body.imprimindo-relatorio .relatorio-pdf-hidden thead {
+    display: table-header-group !important;
   }
-  body.imprimindo-relatorio .relatorio-pdf-hidden th {
-    background: #F1F1ED !important;
-    color: #111 !important;
-    font-weight: 700 !important;
-  }
-  body.imprimindo-relatorio .relatorio-pdf-hidden tr,
-  body.imprimindo-relatorio .relatorio-pdf-hidden .pdf-bloco,
-  body.imprimindo-relatorio .relatorio-pdf-hidden .pdf-kpi {
+  body.imprimindo-relatorio .relatorio-pdf-hidden tr {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
