@@ -2686,11 +2686,15 @@ function RelatorioPdf({ evento, vendas, resumo, produtos, caixas, movimentacoes,
 }
 
 function cssImpressao(largura) {
+  // O papel tem a largura nominal (58/80/110mm), mas a impressora só imprime a
+  // "área útil" (~48mm num papel de 58mm). Se o conteúdo usar a largura cheia,
+  // a impressora CORTA a direita — por isso o conteúdo usa a área útil.
+  const areaUtil = { '58mm': '48mm', '80mm': '72mm', '110mm': '104mm' }[largura] || largura;
   return `
 @media print {
   @page { size: ${largura} auto; margin: 0; }
-  body.imprimindo-fichas .area-impressao { width: ${largura} !important; }
-  .ficha-termica { width: ${largura} !important; }
+  body.imprimindo-fichas .area-impressao { width: ${areaUtil} !important; }
+  .ficha-termica { width: ${areaUtil} !important; }
 }
 `;
 }
@@ -3348,11 +3352,11 @@ tr:last-child td { border-bottom: none; }
 .relatorio-pdf-hidden .pdf-cancelada { color: #777; text-decoration: line-through; }
 
 .print-only { display: none; }
-.ficha-termica { width: 58mm; padding: 2mm 2mm; text-align: center; font-family: 'Courier New', Courier, monospace; font-weight: 700; color: #000; page-break-after: always; border-top: 1px dashed #000; border-bottom: 1px dashed #000; }
-.ficha-topo { font-size: 11px; font-weight: 900; }
+.ficha-termica { width: 48mm; padding: 2mm 1mm; text-align: center; font-family: 'Courier New', Courier, monospace; font-weight: 700; color: #000; page-break-after: always; border-top: 1px dashed #000; border-bottom: 1px dashed #000; }
+.ficha-topo { font-size: 10px; font-weight: 900; }
 .ficha-sub { font-size: 9px; font-weight: 700; margin-bottom: 6px; }
 .ficha-termica h2 { font-size: 14px; margin: 2px 0; color: #000; }
-.ficha-termica h1 { font-size: 21px; font-weight: 900; margin: 4px 0; text-transform: uppercase; color: #000; line-height: 1.1; word-break: break-word; }
+.ficha-termica h1 { font-size: 18px; font-weight: 900; margin: 4px 0; text-transform: uppercase; color: #000; line-height: 1.15; word-break: break-word; }
 .ficha-termica h3 { font-size: 15px; font-weight: 900; margin: 2px 0 6px; color: #000; }
 .ficha-termica p { font-size: 9px; margin: 1px 0; color: #000; }
 .ficha-marca { font-size: 9px; font-weight: 900; letter-spacing: 1.5px; margin-top: 5px; }
@@ -3459,11 +3463,11 @@ nav button.ativo {
   body { background: #fff; }
   .no-print, .sidebar, .topo, .resumo-faixa, .mensagem { display: none !important; }
   body.imprimindo-fichas .app-shell { display: none !important; }
-  body.imprimindo-fichas .area-impressao { display: block !important; width: 58mm !important; margin: 0 !important; }
+  body.imprimindo-fichas .area-impressao { display: block !important; width: 48mm !important; margin: 0 !important; }
   body:not(.imprimindo-fichas) .area-impressao { display: none !important; }
   body:not(.imprimindo-fichas) .app-shell { display: block !important; min-height: auto !important; }
   body:not(.imprimindo-fichas) .conteudo { padding: 0 !important; max-width: none !important; }
-  .ficha-termica { width: 58mm !important; margin: 0 !important; box-shadow: none !important; }
+  .ficha-termica { width: 48mm !important; margin: 0 !important; box-shadow: none !important; }
   .print-area { display: block !important; box-shadow: none !important; border: none !important; padding: 0 !important; }
   .print-area table { font-size: 12px; }
   .print-area h2 { font-size: 22px; }
