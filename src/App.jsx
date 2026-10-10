@@ -135,6 +135,7 @@ export default function App() {
   const [vendaImpressaoDireta, setVendaImpressaoDireta] = useState(null);
   const [vendaConcluida, setVendaConcluida] = useState(null);
 
+  const [mostrarInativos, setMostrarInativos] = useState(false); // tela Produtos: seção de inativos recolhida
   const [colapsado, setColapsado] = useState(() => localStorage.getItem('agendo_eventos_menu_colapsado') === '1');
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1000);
   const [online, setOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -1717,13 +1718,24 @@ export default function App() {
                   <button className="botao verde" disabled={caixaFechado}>Adicionar</button>
                 </form>
               </div>
-              <div className="card">
-                <h2>Produtos e estoque</h2>
+              {/* Ativos (o que está à venda) em cima; inativos embaixo, recolhidos */}
+              {[['ativos', produtos.filter((p) => p.ativo)], ['inativos', produtos.filter((p) => !p.ativo)]].map(([grupo, lista]) => (
+              <div className="card" key={grupo}>
+                {grupo === 'ativos' ? (
+                  <h2>À venda agora ({lista.length})</h2>
+                ) : (
+                  <h2 style={{ cursor: 'pointer', userSelect: 'none', marginBottom: mostrarInativos ? undefined : 0 }} onClick={() => setMostrarInativos((v) => !v)}>
+                    <i className={`ti ti-chevron-${mostrarInativos ? 'down' : 'right'}`} /> Inativos ({lista.length})
+                  </h2>
+                )}
+                {(grupo === 'ativos' || mostrarInativos) && (lista.length === 0 ? (
+                  <p className="vazio">{grupo === 'ativos' ? 'Nenhum produto ativo.' : 'Nenhum produto inativo.'}</p>
+                ) : (
                 <div className="tabela-scroll">
                   <table>
                     <thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Promoção</th><th>Estoque</th><th>Status</th><th>Ação</th></tr></thead>
                     <tbody>
-                      {produtos.map((p) => (
+                      {lista.map((p) => (
                         <tr key={p.id}>
                           <td><input value={p.nome} disabled={caixaFechado} onChange={(e) => setProdutos(produtos.map((x) => x.id === p.id ? { ...x, nome: e.target.value } : x))} onBlur={(e) => atualizarProduto(p.id, 'nome', e.target.value)} /></td>
                           <td>
@@ -1748,7 +1760,9 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
+                ))}
               </div>
+              ))}
             </section>
           )}
 

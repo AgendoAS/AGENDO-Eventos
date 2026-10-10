@@ -1,3 +1,6 @@
 node_modules/ 
 dist/ 
 .env 
+
+# cópias de segurança dos dados de eventos (não vão pro GitHub)
+backup/
